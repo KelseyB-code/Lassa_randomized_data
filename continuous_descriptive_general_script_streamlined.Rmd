@@ -1,0 +1,86 @@
+---
+title: "UPDATED Calculating mean, 95% CI, and odds ratios for continuous variables"
+subtitle: Lassa virus data set, February 2021
+---
+
+This contains code for descriptive analysis of continuous/numeric variables. Start with data frame titled "num" that contains outcome data in first column with header "outcome." Format as a factor variable with two levels: recovered and died. 
+
+Remove observations for which outcome is unknown.
+```{r}
+num <- filter(num, grepl('recovered|died', outcome))
+
+#Create new data frames for survived and died outcomes
+died <- num[grep("died", num$outcome),]
+survived <- num[grep("recovered", num$outcome),]
+
+# make a list of data frames to iterate over later
+list_df <- list(died, survived) 
+```
+
+Calculate mean and 95% CI for survived and died.
+
+```{r}
+#write function to omit NA when calculating CI
+CI_f <- function(x) {
+  CI(na.omit(x), ci=.95)
+}
+
+#function to extract the mean, upper, and lower CI and save to a data frame
+mean_CI <-function(x) {
+  map_df(x[-1], ~list(mean = CI_f(.x)["mean"], 
+                      lower = CI_f(.x)["lower"],
+                      upper = CI_f(.x)["upper"]))
+}
+
+#make lists of mean and CI for survived and died
+means <- map(list_df, ~round(mean_CI(.x), 2))
+names(means) <- c("died_mean", "survived_mean")
+
+#write function to create string
+string <- function(data) {
+  paste0(data$mean, " (", data$lower, "-", data$upper, ")")
+}
+
+string_means <- map(means, string)
+```
+
+
+Calculate missing observations and percent missing for each variable.
+
+```{r}
+missing <- map_int(num[-1], ~sum(is.na(.x)))
+missing_percent <- round(missing/nrow(num) *100,  0)
+missing_string <- paste(missing,"/",nrow(num), " (",missing_percent,"%)",sep = "")
+```
+
+
+Divide age by 10 and other variables by IQR. Then calculate odds ratio. 
+```{r}
+num_scaled <-  cbind("outcome" = num$outcome,
+                     "age" = num$age/10, 
+                     data.frame(map(num[3:16], function(x) x/IQR(x,na.rm = TRUE))))
+
+glm <- map(num_scaled[-1], function(x) glm(outcome ~ x, data = num_scaled, family = binomial))
+```
+
+```{r}
+odds <- map(glm, odds.ratio)
+
+odds_CI_2.5 <- round(map_dbl(map(odds, "2.5 %"), 2), 2)
+odds_CI_97.5 <- round(map_dbl(map(odds, "97.5 %"), 2), 2)
+OR <- round(map_dbl(map(odds, "OR"), 2), 2)
+p_value <- format(signif(map_dbl(map(odds, "p"), 2), 2), scientific = FALSE)
+
+odds_string <- paste0(OR, " (",odds_CI_2.5,"-",odds_CI_97.5,")")
+```
+Make summary table of descriptive data forcontinuous variables
+
+```{r}
+data.frame(cbind(
+  "patients_who_survived" = string_means$survived_mean, 
+  "patients_who_died" = string_means$died_mean, 
+  "missing" = missing_string, 
+  "p_value" = p_value, 
+  "odds_ratio" = odds_string))
+```
+

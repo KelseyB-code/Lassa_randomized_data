@@ -1,0 +1,327 @@
+Lassa "mock" data
+
+```{r}
+library(dplyr)
+library(stringr)
+library(purrr)
+library(questionr)
+library(naniar)
+library(ggplot2)
+library(Rmisc)
+library(ggpubr)
+library(tidyr)
+```
+
+```{r}
+lassa <- read.csv("C:/Users/kelse/Documents/Year_2/Rotations/Colubri/Lassa_virus/practice_data/commcare-randomized-data-2018-2020.csv", header = FALSE, sep = ",")
+
+#Function to convert first row to column names
+header.true <- function(df) {
+  names(df) <- as.character(unlist(df[1,]))
+  df[-1,]
+}
+lassa <- header.true(lassa)
+```
+
+
+Subset data to contain only clinical features before admission
+
+```{r}
+#Subset data
+#remove columns describing days beyond 14 experienced symptoms before admission
+#this information is captured in values = D14+
+clinical_features.before_admission <- lassa %>%
+  select(contains("clinical_features.before_admission")) %>%
+  select(contains("duration")) %>%
+  select(!contains("days")) 
+
+#Remove redundant text from names
+names(clinical_features.before_admission) <-  sub("clinical_features.before_admission_group.before_admission_symptom_duration.", "", names(clinical_features.before_admission))
+
+names(clinical_features.before_admission) <-  sub("clinical_features.before_admission_group.before_admission_bleeding_question_group.bleeding_duration.", "", names(clinical_features.before_admission))
+
+names(clinical_features.before_admission) <-  sub("_before_admission", "", names(clinical_features.before_admission))
+
+names(clinical_features.before_admission) <-  sub("_duration.symptom", "", names(clinical_features.before_admission))
+
+names(clinical_features.before_admission)
+```
+Now convert all values containing text to 1 and all empty values to 0 so we can treat these variables as binary.
+
+```{r}
+clinical_features.before_admission[clinical_features.before_admission != ""] <- 1
+clinical_features.before_admission[clinical_features.before_admission == ""] <- 0
+```
+
+Combine some variables as described in Okokhere et al.
+Severe CNS features = coma, seizure, tremors, confusion 
+Non-severe CNS features = dizziness, lethargy, drowsiness (no lethargy or drowsiness in this dataset)
+
+bleeding_all = eyes_bleeding, hematemesis (vomiting blood), hematochezia (blood in stool), hemoptysis (coughing up blood), injection_sites_bleeding, mouth_bleeding, nostril_bleeding, vaginal_bleeding, other_bleeding
+
+```{r}
+#subset bleeding variables and sum values in new variable
+bleeding <- clinical_features.before_admission[,c(1:3,5:10)]
+bleeding <- data.frame(lapply(bleeding, function(x) as.numeric(as.character(x))))
+bleeding$bleeding_all = rowSums(bleeding[,c(1:9)])
+bleeding <-  bleeding$bleeding_all
+bleeding[bleeding > 1] <- 1
+
+#subset severe cns variables and sum values in new variable
+severe_cns <- clinical_features.before_admission[,c(14,15,29,31)]
+severe_cns <- data.frame(lapply(severe_cns, function(x) as.numeric(as.character(x))))
+severe_cns$cns_total = rowSums(severe_cns[,c(1:4)])
+severe_cns <-  severe_cns$cns_total
+severe_cns[severe_cns > 1] <- 1
+```
+
+Add outcome data to dataset. 39 cases have no entry for outcome. 3 discharged and 4 other. 56 died and 198 recovered. Only include patients with known outcome.
+
+```{r}
+outcome <- lassa$clinical_outcome.outcome
+table(outcome)
+```
+
+Make separate data frames for survived, died, and all patients with known outcome. Omit columns 20 (face_or_neck_swelling), 23 (irritability), and 27 (red_eyes) because 0/300 patients reported symptoms.
+
+```{r}
+cfba <- cbind(outcome, bleeding, severe_cns, clinical_features.before_admission[,-c(1:3,5:10,14,15,20,23,27,29,31)])
+
+survived_bin <- cfba[grep("recovered", cfba$outcome), ]
+died_bin <- cfba[grep("died", cfba$outcome), ]
+all_bin <- rbind(survived_bin, died_bin)
+```
+
+Calculate totals and percents of people who experienced each symptom for all, died, and survived.
+
+```{r}
+#First save all the tables as variables - this gives the total number of patients experiencing each symptom
+#select the second element of the table for each variable
+all_total <- map(map(all_bin, table), 2)
+S_total <- map(map(survived_bin, table), 2)
+D_total <- map(map(died_bin, table), 2)
+
+#Remove first row
+all_total <- all_total[-1]
+S_total <- S_total[-1]
+D_total <- D_total[-1]
+cfba_binary <- names(cfba)
+cfba_binary <- cfba_binary[-1]
+
+#Replace NULL values with o
+all_total[all_total == "NULL"] <- 0
+S_total[S_total == "NULL"] <- 0
+D_total[D_total == "NULL"] <- 0
+
+#Save percent data in variable
+
+all_percent <- round(unlist(all_total)/nrow(all_bin), 2)*100
+S_percent <- round(unlist(S_total)/nrow(survived_bin), 2)*100
+D_percent <- round(unlist(D_total)/nrow(died_bin), 2)*100
+
+#OI_percent_list <- map(map(all, function(x) prop.table(table(x))), 2)
+#S_percent_list <- map(map(survived, function(x) prop.table(table(x))), 2)
+#D_percent_list <- map(map(died, function(x) prop.table(table(x))), 2)
+
+#unlist percent data, multiply by 100, round
+#OI_percent <- round(unlist(OI_percent_list) * 100, 0)
+#S_percent <- round(unlist(S_percent_list) * 100, 0)
+#D_percent <- round(unlist(D_percent_list) * 100, 0)
+```
+
+Now I think I have all the data I need to calculate strings for each variable. Use following code adapted from the hepatitis data analysis.
+```{r}
+all_string <- paste(all_total,"/",nrow(all_bin)," (",all_percent,"%)", sep="")
+surv_string <- paste(S_total,"/",nrow(survived_bin)," (",S_percent,"%)", sep="")
+died_string <- paste(D_total,"/",nrow(died_bin)," (",D_percent,"%)", sep="")
+```
+
+Calculate odds ratios for binary variables - example 
+
+(exposed cases x unexposed non-cases) / (exposed non-cases x unexposed cases)
+severe_cns = (6x196)/(50x2) = 11.76
+bleeding = (13x187)/(11x43) = 5.13
+
+
+```{r}
+apply(table(all_bin$bleeding, all_bin$outcome),2,rev)
+```
+
+Reformat outcome variable as an ordered factor 
+
+```{r}
+all_bin[all_bin == "died"] <- 1
+all_bin[all_bin == "recovered"] <- 0
+all_bin <- data.frame(map(all_bin, as.factor)) #convert variables to factor
+all_bin$outcome <- ordered(all_bin$outcome)
+```
+
+Create separate logistic regression model for each variable and calculate odds ratios by exponentiating coefficients.
+```{r}
+glm <- map(all_bin, function(x) glm(outcome ~ x, data = all_bin, family = binomial))
+odds_df <- data.frame(map(glm[-1], coefficients))
+odds_vector <- exp(as.vector(odds_df[-1,]))
+odds_rounded_list <- as.list(round(odds_vector,2))
+
+#Calculate p-values for odds ratios
+p_value_list <- map(map(glm[-1], odds.ratio), "p")
+p_value <- map(map(p_value_list, 2), function(x) round(x, 5))
+```
+
+Create a summary table of the data.
+
+```{r}
+binary_table <- data.frame(cbind(cfba_binary, all_string, surv_string,  died_string, as.character(p_value), as.character(odds_rounded_list)))
+names(binary_table) <- c("Symptom", "Overall", "Survived", "Died", "p_value", "odds_ratio") 
+binary_table <- binary_table %>%
+  arrange(p_value)
+binary_table
+```
+
+#*Andres: *
+*Should we omit variables where 0 patients who died (jaundice, deafness, dizziness) or survived (restlessness) reported symptoms? Or should we combine these into something else?*
+*I have to look into how the "other" variable is coded and figure out how to deal with this*
+*How do we analyze missing data for these binary variables if there is no negative answer? i.e. we are assuming a blank is a negative answer and not missing data*
+*Once we start dealing with missing data, how do we decide what variables to use to estimate values with imputation?*
+
+Now analyze continuous variables.
+
+clinical_outcome.outcome
+basic_information.age
+
+vitals_d0:
+clinical_features.at_admission_group.vital_signs.at_admission_respiratory_rate
+clinical_features.at_admission_group.vital_signs.at_admission_pulse_rate
+clinical_features.at_admission_group.vital_signs.at_admission_systolic_blood_pressure
+clinical_features.at_admission_group.vital_signs.at_admission_diastolic_blood_pressure
+clinical_features.at_admission_group.vital_signs.at_admission_temperature
+clinical_features.before_admission_group.before_admission_symptom_duration.fever_duration.symptom_before_admission
+
+max_vitals_d1
+clinical_factors.vital_signs.max_temperature.d1
+clinical_factors.vital_signs.max_systolic_blood_pressure.d1
+clinical_factors.vital_signs.max_diastolic_blood_pressure.d1
+clinical_factors.vital_signs.max_pulse_rate.d1
+clinical_factors.vital_signs.max_respiratory_rate.d1
+
+Start with age and blood chemistry values at presentation (I interpret "d0" suffix to mean at presentation).
+
+```{r}
+#omit character variables for this analysis 
+blood_chemistry_d0 <- lassa %>%
+  select(contains("blood_chemistry")) %>%
+  select(contains(".0")) %>%
+  select(!contains("laboratory")) %>% #character variable
+  select(!contains("days_since_admission_of_test")) #character
+
+#all variables here must be numeric - strings are interpreted as NA
+blood_chemistry_d0 <- cbind("age" = lassa$basic_information.age, blood_chemistry_d0)
+blood_chemistry_d0 <- data.frame(lapply(blood_chemistry_d0, as.numeric))
+
+#count NAs
+lapply(blood_chemistry_d0, function(x) sum(is.na(x)))
+```
+
+Remove variables with >90% missing (>270 NAs) and format headers.
+
+```{r}
+#remove missing variables
+blood_chemistry_d0 <- blood_chemistry_d0 %>%
+  select(!contains("blood_chemistry_list.phosphates.0")) %>% #100% missing
+  select(!contains("blood_chemistry_list.calcium.0")) %>% #100% missing
+  select(!contains("blood_chemistry_list.conjugated_bilirubin.0")) %>% #99% missing
+  select(!contains("blood_chemistry_list.blood_sugar.0")) %>%
+  select(!contains("blood_chemistry_list.alkaline_phosphatase.0")) 
+
+#remove redundant text from names
+names(blood_chemistry_d0) <- sub("blood_chemistry_list.", "", names(blood_chemistry_d0))
+```
+
+Create separate datasets for survived, died, and all.
+
+```{r}
+#add outcome variable
+o <- as.factor(lassa$clinical_outcome.outcome)
+o[o == ""] <- NA
+bloodchem <- data.frame(cbind("outcome" = o, blood_chemistry_d0))
+          
+bloodchem_survived <- bloodchem[grep("recovered", bloodchem$outcome), ]
+bloodchem_died <- bloodchem[grep("died", bloodchem$outcome), ]
+bloodchem_all <- rbind(bloodchem_survived, bloodchem_died)
+```
+
+Calculate mean and 95% CI for survived, died, and all.
+
+```{r}
+bloodchem_S_CI <- map(bloodchem_survived[-1], function (x) CI((na.omit(x, ci=.95))))
+bloodchem_D_CI
+bloodchem_D_CI <- map(bloodchem_died[-1], function (x) CI((na.omit(x, ci=.95))))
+bloodchem_A_CI <- map(bloodchem_all[-1], function (x) CI((na.omit(x, ci=.95))))
+```
+
+Make some graphs to compare distributions
+
+```{r}
+s <- bloodchem_survived[-1] %>%                   
+  gather()
+d <- bloodchem_died[-1] %>%                   
+  gather()
+
+ggplot() +
+  geom_density(data = s, (aes(value)), fill='lightblue', color="darkblue") +
+  facet_wrap(~ key, scales = "free") +
+  geom_density(data = d, (aes(value)), fill='red', color="darkred") +
+  facet_wrap(~ key, scales = "free")
+```
+
+Compare means of survived and died - unpaired two sample t-test (parametric)
+Paramentric tests assume the true population mean is normally distributed
+
+```{r}
+t <- map2(bloodchem_survived[-1], bloodchem_died[-1], t.test)
+
+ms <- unlist(map(map(t, "estimate"), 1)) #mean of survived
+md <- unlist(map(map(t, "estimate"), 2)) #mean of died
+p <- unlist(map(t, "p.value"))
+
+data.frame(cbind("mean_survived" = ms, "mean_died" = md, "p_value_t_test" = p))
+```
+
+```{r}
+t_test <- compare_means(c(age, total_protein.0, albumin.0, total_bilirubin.0, aspartate_aminotransferase_ast.0,  alaninea_aminotransferas_alt.0, lactate_dehydrogenase.0,  amylase.0, blood_urea_nitrogen.0, creatinine.0, potassium.0, sodium.0, chloride.0, bicarbonate.0) ~ outcome, bloodchem_all, method = "t.test", paired = FALSE,
+  group.by = NULL, ref.group = NULL)
+```
+
+```{r}
+ggboxplot(bloodchem_all, x = "outcome", y = "age", 
+                  color = "outcome", add = "jitter") + 
+  stat_compare_means(method = "t.test")
+```
+
+Now calculate odds ratio per 10 year increase in age.
+
+```{r}
+outcome.age <- bloodchem_all[1:2]
+outcome.age$age_div10 <- outcome.age$age/10
+outcome.age
+outcome.age.glm <- glm(outcome ~ age_div10, data = outcome.age, family = binomial)
+exp(outcome.age.glm$coefficients[2])
+```
+
+Calculate odds ratios and p-values for all clinical chemistry values upon admission.
+
+```{r}
+glm_bloodchem <- map(bloodchem_all[-1], function(x) glm(outcome ~ x, data = bloodchem_all, family = binomial))
+odds_bloodchem_list <- map(map(glm_bloodchem, coefficients), 2)
+odds_bloodchem <- round(exp(unlist(odds_bloodchem)), 2)
+
+#Calculate p-values for odds ratios
+p_value_bloodchem_list <- map(map(glm_bloodchem, odds.ratio), "p")
+p_value <- map(map(p_value_bloodchem_list, 2), function(x) round(x, 5))
+p_value
+```
+
+```{r}
+
+```
+

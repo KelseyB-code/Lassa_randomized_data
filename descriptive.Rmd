@@ -1,0 +1,126 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+```{r}
+library(dplyr)
+library(stringr)
+library(purrr)
+```
+
+```{r}
+lassa <- read.csv("C:/Users/kelse/Documents/Year_2/Rotations/Colubri/Lassa_virus/practice_data/commcare-randomized-data-2018-2020.csv", header = FALSE, sep = ",")
+
+lassa <- lassa_raw
+
+#Function to convert first row to column names
+header.true <- function(df) {
+  names(df) <- as.character(unlist(df[1,]))
+  df[-1,]
+}
+lassa <- header.true(lassa)
+```
+
+Subset data to contain only clinical features before admission
+
+```{r}
+#Subset data
+#remove columns describing days beyond 14 experienced symptoms before admission
+#this information is captured in values = D14+
+clinical_features.before_admission <- lassa %>%
+  select(contains("clinical_features.before_admission")) %>%
+  select(contains("duration")) %>%
+  select(!contains("days")) 
+
+#Remove redundant text from names
+names(clinical_features.before_admission) <-  sub("clinical_features.before_admission_group.before_admission_symptom_duration.", "", names(clinical_features.before_admission))
+
+names(clinical_features.before_admission) <-  sub("clinical_features.before_admission_group.before_admission_bleeding_question_group.bleeding_duration.", "", names(clinical_features.before_admission))
+
+names(clinical_features.before_admission) <-  sub("_before_admission", "", names(clinical_features.before_admission))
+
+names(clinical_features.before_admission) <-  sub("_duration.symptom", "", names(clinical_features.before_admission))
+
+names(clinical_features.before_admission)
+```
+
+Now convert all values containing text to 1 and all empty values to 0 so we can treat these variables as binary.
+
+```{r}
+clinical_features.before_admission[clinical_features.before_admission != ""] <- 1
+clinical_features.before_admission[clinical_features.before_admission == ""] <- 0
+```
+
+Severe CNS features = coma, seizure, tremors, confusion (Okokhere et al.)
+Non-severe CNS features = dizziness, lethargy, drowsiness (no lethargy or drowsiness in this dataset)
+
+bleeding_all = eyes_bleeding, hematemesis (vomiting blood), hematochezia (blood in stool), hemoptysis (coughing up blood), injection_sites_bleeding, mouth_bleeding, nostril_bleeding, vaginal_bleeding, other_bleeding
+
+```{r}
+#subset bleeding variables and sum values in new variable
+bleeding <- clinical_features.before_admission[,c(1:3,5:10)]
+bleeding <- data.frame(lapply(bleeding, function(x) as.numeric(as.character(x))))
+bleeding$bleeding_all = rowSums(bleeding[,c(1:9)])
+bleeding <-  bleeding$bleeding_all
+bleeding[bleeding > 1] <- 1
+
+#subset severe cns variables and sum values in new variable
+severe_cns <- clinical_features.before_admission[,c(14,15,29,31)]
+severe_cns <- data.frame(lapply(severe_cns, function(x) as.numeric(as.character(x))))
+severe_cns$cns_total = rowSums(severe_cns[,c(1:4)])
+severe_cns <-  severe_cns$cns_total
+severe_cns[severe_cns > 1] <- 1
+```
+
+Add outcome data to dataset 
+
+```{r}
+outcome <- lassa$clinical_outcome.outcome
+
+
+cfba <- cbind(outcome, bleeding, severe_cns, clinical_features.before_admission[,-c(1:3,5:10,14,15,20,23,29,31)])
+cfba_binary <- names(cfba)
+cfba_binary <- cfba_binary[-c(1,21)]
+```
+
+Look at total counts and proportions of symptoms upon admission. Omit face_and_neck_swelling and irritability because 0/300 patients reported these.
+
+```{r}
+overall_incidence <- map(cfba, function(x) prop.table(table(x)))
+overall_incidence <- map(overall_incidence, 2)
+overall_incidence <- as.numeric(overall_incidence)
+overall_incidence <- round((overall_incidence*100),0)
+
+overall_total <- map(cfba, table)
+overall_total <- map(overall_total, 2)
+overall_total
+for (i in cfba_binary) {
+  OI <- paste(overall_total,"/300"," (",overall_incidence,"%)", sep="")
+}
+```
+
+Remove patients for whom outcome is not known. This includes discharged = 3 and other = 4. Separate into new data sets for survived and died.
+
+```{r}
+#Select rows where patients experienced symptoms beyond 14 days prior to admission
+survived <- cfba[grep("recovered", cfba$outcome), ]
+died <- cfba[grep("died", cfba$outcome), ]
+all <- rbind(survived, died)
+
+```
+
+```{r}
+overall_incidence <- map(cfba, function(x) prop.table(table(x)))
+overall_incidence <- map(overall_incidence, 2)
+overall_incidence <- as.numeric(overall_incidence)
+overall_incidence <- round((overall_incidence*100),0)
+
+overall_total <- map(cfba, table)
+overall_total <- map(overall_total, 2)
+overall_total
+for (i in cfba_binary) {
+  OI <- paste(overall_total,"/300"," (",overall_incidence,"%)", sep="")
+}
+```
+

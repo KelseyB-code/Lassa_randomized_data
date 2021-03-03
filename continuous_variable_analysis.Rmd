@@ -1,0 +1,158 @@
+---
+title: "Descriptive analysis of continuous variables in Lassa virus data set"
+---
+```{r}
+library(dplyr)
+library(textclean)
+library(purrr)
+library(Rmisc)
+library(questionr)
+```
+
+Load data from csv file.
+
+```{r}
+lassa <- read.csv("C:/Users/kelse/Documents/Year_2/Rotations/Colubri/Lassa_virus/practice_data/commcare-randomized-data-2018-2020.csv", header = TRUE, sep = ",")
+```
+
+Subset continuous variables: hematology at admission, vitals at admission, max vitals on first day, blood chemistry at admission, and age. Add outcome to data frame.
+
+```{r}
+outcome <- as.factor(lassa$clinical_outcome.outcome)
+age <- as.numeric(lassa$basic_information.age)
+
+hematology <- lassa %>%
+  select(starts_with("hematology_list")) %>%
+  select(contains(".0")) %>%
+  select(!contains("laboratory")) %>% 
+  select(!contains("days_since_admission_of_test"))
+
+vitals_admission <- lassa %>%
+  select(contains("vital")) %>%
+  select(contains("admission"))
+
+vitals_max_d1 <- lassa %>%
+  select(contains("vital")) %>%
+  select(contains("max")) %>%
+  select(ends_with("d1"))
+
+blood_chemistry <- lassa %>%
+  select(starts_with("blood_chemistry")) %>%
+  select(!contains("test_count")) %>%
+  select(contains(".0")) %>%
+  select(!contains("laboratory")) %>% 
+  select(!contains("days_since_admission_of_test"))
+
+names(blood_chemistry) <- mgsub(names(blood_chemistry), c("blood_chemistry_list.", 
+                                     "aspartate_aminotransferase_ast", 
+                                     "alaninea_aminotransferas_alt", 
+                                     "lactate_dehydrogenase", 
+                                     "alkaline_phosphatase", 
+                                     "blood_urea_nitrogen"), 
+      c("", 
+        "ast", 
+        "alt", 
+        "ldh", 
+        "alp", 
+        "bun"))
+
+vars <- cbind(age, vitals_admission, vitals_max_d1, hematology, blood_chemistry)
+num <-  cbind(outcome, map_df(vars, as.numeric))
+
+names(num) <- mgsub(names(num), c("clinical_features.at_admission_group.vital_signs.at_", 
+                    "clinical_factors.vital_signs.",
+                    "hematology_list.",
+                    ".0"),
+      c("", "", "", ""))
+```
+
+```{r}
+#Create new data frames for survived and died outcomes
+died <- num[grep("died", num$outcome),]
+survived <- num[grep("recovered", num$outcome),]
+
+# make a list of data frames to iterate over later
+list_df <- list(died, survived) 
+```
+
+Calculate mean and 95% CI for survived and died. Gives error message "NaNs produced" because some variables (calcium and phosphates) have no data. I left these in because in the real dataset these variables may have values.
+
+```{r}
+#write function to omit NA when calculating CI
+CI_f <- function(x) {
+  CI(na.omit(x), ci=.95)
+}
+
+#function to extract the mean, upper, and lower CI and save to a data frame
+mean_CI <-function(x) {
+  map_df(x[-1], ~list(mean = CI_f(.x)["mean"], 
+                      lower = CI_f(.x)["lower"],
+                      upper = CI_f(.x)["upper"]))
+}
+
+#make lists of mean and CI for survived and died
+means <- map(list_df, ~round(mean_CI(.x), 2))
+names(means) <- c("died_mean", "survived_mean")
+
+#write function to create string
+string <- function(data) {
+  paste0(data$mean, " (", data$lower, "-", data$upper, ")")
+}
+
+string_means <- map(means, string)
+```
+
+
+Calculate missing observations and percent missing for each variable.
+
+```{r}
+missing <- map_int(num[-1], ~sum(is.na(.x)))
+missing_percent <- round(missing/nrow(num) *100,  0)
+missing_string <- paste(missing,"/",nrow(num), " (",missing_percent,"%)",sep = "")
+```
+
+Define levels of outcome variable and remove patients for whom outcome is unknown.
+The first line of code is specific to the dataset - variables with no values need to be removed from the dataset before running glm.
+```{r}
+### this line of code is specific to the dataset
+### delete columns that have no values
+#num <- num[,-c(46,47)]
+
+num2 <- filter(num, grepl('recovered|died', outcome))
+outcome_factor <- factor(num2$outcome, levels = c("died", "recovered"))
+```
+
+Divide age by 10 and other variables by IQR. Then calculate odds ratio. 
+
+```{r}
+num_scaled <-  cbind("outcome" = outcome_factor,
+                     "age" = num2$age/10, 
+                     data.frame(map(num2[-c(1,2)], function(x) x/IQR(x,na.rm = TRUE))))
+
+glm <- map(num_scaled[-1], function(x) glm(outcome ~ x, data = num_scaled, family = binomial))
+```
+
+```{r}
+odds <- map(glm, odds.ratio)
+
+odds_CI_2.5 <- round(map_dbl(map(odds, "2.5 %"), 2), 2)
+odds_CI_97.5 <- round(map_dbl(map(odds, "97.5 %"), 2), 2)
+OR <- round(map_dbl(map(odds, "OR"), 2), 2)
+p_value <- format(signif(map_dbl(map(odds, "p"), 2), 2), scientific = FALSE)
+
+odds_string <- paste0(OR, " (",odds_CI_2.5,"-",odds_CI_97.5,")")
+```
+Make summary table of descriptive data forcontinuous variables
+
+```{r}
+summary <- data.frame(cbind(
+  "description" = names(num[-1]),
+  "patients_who_survived" = string_means$survived_mean, 
+  "patients_who_died" = string_means$died_mean, 
+  "missing" = missing_string, 
+  "p_value" = p_value, 
+  "odds_ratio" = odds_string))
+
+summary
+```
+

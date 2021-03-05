@@ -64,6 +64,9 @@ names(num) <- mgsub(names(num), c("clinical_features.at_admission_group.vital_si
                     "hematology_list.",
                     ".0"),
       c("", "", "", ""))
+
+#remove columns where all values are NA
+num <- num[,colSums(is.na(num))<nrow(num)]
 ```
 
 ```{r}
@@ -119,7 +122,7 @@ The first line of code is specific to the dataset - variables with no values nee
 #num <- num[,-c(46,47)]
 
 num2 <- filter(num, grepl('recovered|died', outcome))
-outcome_factor <- factor(num2$outcome, levels = c("died", "recovered"))
+outcome_factor <- ordered(num2$outcome, levels = c("recovered", "died"))
 ```
 
 Divide age by 10 and other variables by IQR. Then calculate odds ratio. 
@@ -146,7 +149,6 @@ Make summary table of descriptive data forcontinuous variables
 
 ```{r}
 summary <- data.frame(cbind(
-  "description" = names(num[-1]),
   "patients_who_survived" = string_means$survived_mean, 
   "patients_who_died" = string_means$died_mean, 
   "missing" = missing_string, 

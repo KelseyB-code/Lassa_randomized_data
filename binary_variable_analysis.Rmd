@@ -1,0 +1,193 @@
+---
+title: "Descriptive analysis of binary variables in Lassa virus dataset"
+---
+
+Lassa "mock" data
+```{r}
+library(dplyr)
+library(stringr)
+library(purrr)
+library(questionr)
+library(naniar)
+library(ggplot2)
+library(Rmisc)
+library(ggpubr)
+library(tidyr)
+library(textclean)
+```
+
+```{r}
+lassa <- read.csv("C:/Users/kelse/Documents/Year_2/Rotations/Colubri/Lassa_virus/practice_data/commcare-randomized-data-2018-2020.csv", header = TRUE, sep = ",")
+```
+
+
+Subset data to contain only clinical features before admission
+
+```{r}
+#Subset data
+clinical_features.before_admission <- lassa %>%
+  select(contains("clinical_features.before_admission")) %>%
+  select(contains("duration")) %>%
+  select(!contains("days")) 
+
+#Remove redundant text from names
+names(clinical_features.before_admission) <-  mgsub(names(clinical_features.before_admission), c(
+  "clinical_features.before_admission_group.before_admission_symptom_duration.",
+  "clinical_features.before_admission_group.before_admission_bleeding_question_group.bleeding_duration.",
+  "_before_admission",
+  "_duration.symptom"), c("", "", "", ""))
+```
+
+Now convert all values containing text to 1 and all empty values to 0 so we can treat these variables as binary.
+
+```{r}
+clinical_features.before_admission[clinical_features.before_admission != ""] <- 1
+clinical_features.before_admission[clinical_features.before_admission == ""] <- 0
+```
+
+Combine some variables as described in Okokhere et al.
+Severe CNS features = coma, seizure, tremors, confusion 
+Non-severe CNS features = dizziness, lethargy, drowsiness (no lethargy or drowsiness in this dataset)
+
+bleeding_all = eyes_bleeding, hematemesis (vomiting blood), hematochezia (blood in stool), hemoptysis (coughing up blood), injection_sites_bleeding, mouth_bleeding, nostril_bleeding, vaginal_bleeding, other_bleeding
+
+```{r}
+#subset bleeding variables and sum values in new variable, don't include eyes_bleeding
+bleeding_names <- names(clinical_features.before_admission[c(2,4:9)])
+bleeding <- clinical_features.before_admission[,bleeding_names]
+bleeding <- map_df(bleeding, as.numeric)
+bleeding$bleeding = rowSums(bleeding)
+bleeding[bleeding > 1] <- 1
+
+#subset severe cns variables and sum values in new variable
+severe_cns_names <- c("coma", "seizure", "tremors", "confusion")
+severe_cns <- clinical_features.before_admission[,severe_cns_names]
+severe_cns <- map_df(severe_cns, as.numeric)
+severe_cns$severe_cns = rowSums(severe_cns)
+severe_cns[severe_cns > 1] <- 1
+```
+
+Make separate data frames for survived, died, and all patients with known outcome. 
+
+```{r}
+#vector of variables to include in final analysis - remove "red_eyes" because there are not
+names <- c("hematuria", "abdominal_pain", "chest_pain", "cough", "deafness", "diarrhea", "dizziness", "dyspnoea", "fever", "headache", "jaundice", "myalgia", "neck_stiffness","restlessness", "sore_throat", "vomiting", "weakness", "other")
+
+outcome <- lassa$clinical_outcome.outcome
+
+cfba <- cbind("outcome" = outcome, "bleeding" = bleeding$bleeding, "severe_cns" = severe_cns$severe_cns, clinical_features.before_admission[,c(names)])
+```
+
+Calculate totals and percents of people who experienced each symptom for all, died, and survived.
+
+```{r}
+survived_bin <- cfba[grep("recovered", cfba$outcome), ]
+died_bin <- cfba[grep("died", cfba$outcome), ]
+all_bin <- rbind(survived_bin, died_bin)
+
+#First save all the tables as variables - this gives the total number of patients experiencing each symptom
+#select the second element of the table for each variable
+all_total <- map(map(all_bin, table), 2)
+S_total <- map(map(survived_bin, table), 2)
+D_total <- map(map(died_bin, table), 2)
+
+#Remove first row
+all_total <- all_total[-1]
+S_total <- S_total[-1]
+D_total <- D_total[-1]
+cfba_binary <- names(cfba)
+cfba_binary <- cfba_binary[-1]
+
+#Replace NULL values with o
+all_total[all_total == "NULL"] <- 0
+S_total[S_total == "NULL"] <- 0
+D_total[D_total == "NULL"] <- 0
+
+#Save percent data in variable
+
+all_percent <- round(unlist(all_total)/nrow(all_bin), 2)*100
+S_percent <- round(unlist(S_total)/nrow(survived_bin), 2)*100
+D_percent <- round(unlist(D_total)/nrow(died_bin), 2)*100
+
+#OI_percent_list <- map(map(all, function(x) prop.table(table(x))), 2)
+#S_percent_list <- map(map(survived, function(x) prop.table(table(x))), 2)
+#D_percent_list <- map(map(died, function(x) prop.table(table(x))), 2)
+
+#unlist percent data, multiply by 100, round
+#OI_percent <- round(unlist(OI_percent_list) * 100, 0)
+#S_percent <- round(unlist(S_percent_list) * 100, 0)
+#D_percent <- round(unlist(D_percent_list) * 100, 0)
+```
+
+Make strings to report data.
+```{r}
+all_string <- paste(all_total,"/",nrow(all_bin)," (",all_percent,"%)", sep="")
+surv_string <- paste(S_total,"/",nrow(survived_bin)," (",S_percent,"%)", sep="")
+died_string <- paste(D_total,"/",nrow(died_bin)," (",D_percent,"%)", sep="")
+```
+
+Calculate odds ratios for binary variables - example 
+
+(exposed cases x unexposed non-cases) / (exposed non-cases x unexposed cases)
+severe_cns = (6x196)/(50x2) = 11.76
+bleeding = (13x187)/(11x43) = 5.13
+
+
+```{r}
+apply(table(all_bin$bleeding, all_bin$outcome),2,rev)
+```
+
+Reformat outcome variable as an ordered factor 
+
+```{r}
+all_bin[all_bin == "died"] <- 1
+all_bin[all_bin == "recovered"] <- 0
+all_bin <- data.frame(map(all_bin, as.factor)) #convert variables to factor
+all_bin$outcome <- ordered(all_bin$outcome)
+```
+
+Create separate logistic regression model for each variable and calculate odds ratios by exponentiating coefficients.
+```{r}
+glm <- map(all_bin, function(x) glm(outcome ~ x, data = all_bin, family = binomial))
+odds_df <- data.frame(map(glm[-1], coefficients))
+odds_vector <- exp(as.vector(odds_df[-1,]))
+odds_rounded_list <- as.list(round(odds_vector,2))
+
+#Calculate p-values for odds ratios
+p_value_list <- map(map(glm[-1], odds.ratio), "p")
+p_value <- map(map(p_value_list, 2), function(x) round(x, 5))
+```
+
+Create a summary table of the data.
+
+```{r}
+binary_table <- data.frame(cbind(cfba_binary, all_string, surv_string,  died_string, as.character(p_value), as.character(odds_rounded_list)))
+names(binary_table) <- c("Symptom", "Overall", "Survived", "Died", "p_value", "odds_ratio") 
+binary_table <- binary_table %>%
+  arrange(p_value)
+binary_table
+```
+
+Alternative way to calculate values for binary variables: extract symptom information from character variable "clinical_features.before_admission_group.before_admission_symptoms_select."  Use this info to create binary variables to analyze for symptoms at presentation.
+
+This includes patients with all outcomes, not just recovered or died.
+
+```{r}
+symptoms <- c('abdominal_pain', 'fever', 'headache', 'sore_throat', 'vomiting', 'diarrhea', 'myalgia',
+             'neck_stiffness', 'restlessness', 'cough', 'weakness', 'chest_pain', 'dyspnoea', 'deafness', 
+             'jaundice', 'seizure', 'red_eyes', 'dizziness',  'tremor',  'coma', 'confusion', 'other')
+
+#function to create new binary variable from string 
+newbinvar <- function(x) {
+  x <- ifelse(grepl(x, lassa$clinical_features.before_admission_group.before_admission_symptoms_select), 1, 0)
+}
+
+#create new data frame with binary variables
+binary1 <- map(symptoms, newbinvar)
+names(binary1) <- symptoms
+binary1 <- data.frame(binary1)
+
+binary <- cbind(lassa$clinical_features.before_admission_group.before_admission_symptoms_select, binary1)
+b <-  map_df(binary[-1], as.numeric)
+data.frame(colSums(b))
+```

@@ -5,6 +5,8 @@ library(textclean)
 library(purrr)
 library(Rmisc)
 library(questionr)
+library(ggplot2)
+library(tidyr)
 ```
 
 Load data from csv file.
@@ -61,24 +63,25 @@ duration_days_df <- data.frame(Map(replace_with_other, duration[names], days[nam
 duration_days <-  data.frame(map(duration_days_df, as.numeric))
 ```
 
-
 ```{r}
-upper <- function(x) {
-  CI(x)["upper"]
-}
-
-lower <- function(x) {
-  CI(x)["lower"]
-} 
+duration_df <- cbind("outcome" = lassa$clinical_outcome.outcome,
+                     duration_days[,colSums(is.na(duration_days))<nrow(duration_days)])
 ```
 
 ```{r}
-outcome <- lassa$clinical_outcome.outcome
-duration_df <- cbind("outcome" = outcome, duration_days)
+varnames <- c("abdominal_pain", "chest_pain",  "cough", "headache")
 
-duration_df %>%
-  group_by(outcome) %>%
+duration_summary <- duration_df %>%
+  pivot_longer(cols = varnames, names_to = 'symptom') %>% 
   filter(outcome == "died" | outcome == "recovered") %>%
-  dplyr::summarize_all(list(mean = mean, upper= upper, lower = lower))
-```
+  group_by(outcome, symptom) %>%
+  dplyr::summarise(mean = mean(value), sd = sd(value), .groups = 'drop')
 
+duration_summary
+
+#create ggplot
+ggplot(data = duration_summary, mapping = aes(x = symptom, y = mean, fill = outcome)) + 
+  geom_bar(stat="identity", position=position_dodge()) + 
+  ggtitle("Average number of days patient experienced symptom before admission") +
+  ylab("Days")
+```

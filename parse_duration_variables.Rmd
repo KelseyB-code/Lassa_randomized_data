@@ -1,0 +1,84 @@
+
+```{r}
+library(dplyr)
+library(textclean)
+library(purrr)
+library(Rmisc)
+library(questionr)
+```
+
+Load data from csv file.
+
+```{r}
+lassa <- read.csv("C:/Users/kelse/Documents/Year_2/Rotations/Colubri/Lassa_virus/practice_data/commcare-randomized-data-2018-2020.csv", header = TRUE, sep = ",")
+```
+
+```{r}
+char_to_num <- function(data) {
+mgsub(data, c("D14+ D14 D13 D12 D11 D10 D9 D8 D7 D6 D5 D4 D3 D2 D1", "D14 D13 D12 D11 D10 D9 D8 D7 D6 D5 D4 D3 D2 D1",  "D13 D12 D11 D10 D9 D8 D7 D6 D5 D4 D3 D2 D1", "D12 D11 D10 D9 D8 D7 D6 D5 D4 D3 D2 D1", "D11 D10 D9 D8 D7 D6 D5 D4 D3 D2 D1", "D10 D9 D8 D7 D6 D5 D4 D3 D2 D1", "D9 D8 D7 D6 D5 D4 D3 D2 D1", "D8 D7 D6 D5 D4 D3 D2 D1", "D7 D6 D5 D4 D3 D2 D1", "D6 D5 D4 D3 D2 D1", "D5 D4 D3 D2 D1", "D4 D3 D2 D1", "D3 D2 D1", "D2 D1", "D1"), 
+      c(">14", 14:1))
+}
+
+feat <- lassa %>%
+  select(contains("clinical_features")) %>%
+  select(!contains("vital")) %>% #remove continuous variables 
+  select(!contains("clinical_factors.additional_clinical_features")) %>%
+  select(contains("duration"))
+
+names(feat) <- mgsub(names(feat), c("clinical_features.before_admission_group.before_admission",
+                     "_symptom_duration.",
+                     "_bleeding_question_group.bleeding_duration.", 
+                     "_duration.symptom",
+                     "_before_admission",
+                     "_duration.days_symptom"),
+      c("", "", "", "", "", "_days"))
+feat[feat == ""] <- 0
+```
+
+```{r}
+days <- feat %>%
+  select(contains("days")) 
+names(days) <- mgsub(names(days), c("_days"), c(""))
+days <- map_df(days, as.numeric)
+
+duration <- feat %>%
+  select(!contains("days"))
+duration <- data.frame(map(duration, char_to_num))
+
+names <- names(days)
+```
+
+```{r}
+#function to replace values of "+" with corresponding value in other data.frame
+replace_with_other <- function(x, y) {
+  ifelse(x == ">14", y, x)
+}
+
+duration_days_df <- data.frame(Map(replace_with_other, duration[names], days[names]))
+
+#change class to numeric 
+#this throws an error "NAs introduced by coercion" but this is okay
+duration_days <-  data.frame(map(duration_days_df, as.numeric))
+```
+
+
+```{r}
+upper <- function(x) {
+  CI(x)["upper"]
+}
+
+lower <- function(x) {
+  CI(x)["lower"]
+} 
+```
+
+```{r}
+outcome <- lassa$clinical_outcome.outcome
+duration_df <- cbind("outcome" = outcome, duration_days)
+
+duration_df %>%
+  group_by(outcome) %>%
+  filter(outcome == "died" | outcome == "recovered") %>%
+  dplyr::summarize_all(list(mean = mean, upper= upper, lower = lower))
+```
+

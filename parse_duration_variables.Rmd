@@ -1,32 +1,30 @@
 
 ```{r}
+library(ggpubr)
+library(rstatix)
 library(dplyr)
 library(textclean)
-library(purrr)
-library(Rmisc)
-library(questionr)
-library(ggplot2)
 library(tidyr)
+library(stringr)
 ```
 
-Load data from csv file.
+Load data.
 
 ```{r}
-lassa <- read.csv("C:/Users/kelse/Documents/Year_2/Rotations/Colubri/Lassa_virus/practice_data/commcare-randomized-data-2018-2020.csv", header = TRUE, sep = ",")
+filename = "C:/Users/kelse/Documents/Year_2/Rotations/Colubri/Lassa_virus/practice_data/commcare-randomized-data-2018-2020.csv"
+lassa <- read.csv(filename, header = TRUE, sep = ",")
 ```
 
 ```{r}
-char_to_num <- function(data) {
-mgsub(data, c("D14+ D14 D13 D12 D11 D10 D9 D8 D7 D6 D5 D4 D3 D2 D1", "D14 D13 D12 D11 D10 D9 D8 D7 D6 D5 D4 D3 D2 D1",  "D13 D12 D11 D10 D9 D8 D7 D6 D5 D4 D3 D2 D1", "D12 D11 D10 D9 D8 D7 D6 D5 D4 D3 D2 D1", "D11 D10 D9 D8 D7 D6 D5 D4 D3 D2 D1", "D10 D9 D8 D7 D6 D5 D4 D3 D2 D1", "D9 D8 D7 D6 D5 D4 D3 D2 D1", "D8 D7 D6 D5 D4 D3 D2 D1", "D7 D6 D5 D4 D3 D2 D1", "D6 D5 D4 D3 D2 D1", "D5 D4 D3 D2 D1", "D4 D3 D2 D1", "D3 D2 D1", "D2 D1", "D1"), 
-      c(">14", 14:1))
-}
-
+#subset data
 feat <- lassa %>%
   select(contains("clinical_features")) %>%
   select(!contains("vital")) %>% #remove continuous variables 
   select(!contains("clinical_factors.additional_clinical_features")) %>%
-  select(contains("duration"))
+  select(contains("duration")) %>%
+  select(!contains("days"))
 
+#remove redundant text from names
 names(feat) <- mgsub(names(feat), c("clinical_features.before_admission_group.before_admission",
                      "_symptom_duration.",
                      "_bleeding_question_group.bleeding_duration.", 
@@ -34,54 +32,44 @@ names(feat) <- mgsub(names(feat), c("clinical_features.before_admission_group.be
                      "_before_admission",
                      "_duration.days_symptom"),
       c("", "", "", "", "", "_days"))
-feat[feat == ""] <- 0
+
+#count number of times D appears in each string to convert string to a number
+feat[] <- lapply(feat, function(x) str_count(x, "D"))
 ```
 
+Calculate column means for each symptom. Do not include values of 0, because we want mean number of days patient experienced symptom, only if the patient reported the symptom.
+
 ```{r}
-days <- feat %>%
-  select(contains("days")) 
-names(days) <- mgsub(names(days), c("_days"), c(""))
-days <- map_df(days, as.numeric)
+#replace values of 0 with NA
+is.na(feat) <- feat==0
 
-duration <- feat %>%
-  select(!contains("days"))
-duration <- data.frame(map(duration, char_to_num))
+#calculate column means
+Sx_means <- sort(colMeans(feat, na.rm=TRUE))
 
-names <- names(days)
+#add outcome to data frame
+duration_df <- cbind("outcome" = lassa$clinical_outcome.outcome, feat)
+
+#create cutoff variable equal to 90% of total number of observations
+cutoff <-  nrow(lassa)*.9
+
+#only include variables where at least 10% of patients reported symptoms
+varnames <- names(Filter(function(x) x < cutoff, colSums(is.na(feat))))
 ```
 
-```{r}
-#function to replace values of "+" with corresponding value in other data.frame
-replace_with_other <- function(x, y) {
-  ifelse(x == ">14", y, x)
-}
-
-duration_days_df <- data.frame(Map(replace_with_other, duration[names], days[names]))
-
-#change class to numeric 
-#this throws an error "NAs introduced by coercion" but this is okay
-duration_days <-  data.frame(map(duration_days_df, as.numeric))
-```
+Create ggplot and add significance.
 
 ```{r}
-duration_df <- cbind("outcome" = lassa$clinical_outcome.outcome,
-                     duration_days[,colSums(is.na(duration_days))<nrow(duration_days)])
-```
-
-```{r}
-varnames <- c("abdominal_pain", "chest_pain",  "cough", "headache")
-
 duration_summary <- duration_df %>%
   pivot_longer(cols = varnames, names_to = 'symptom') %>% 
   filter(outcome == "died" | outcome == "recovered") %>%
   group_by(outcome, symptom) %>%
-  dplyr::summarise(mean = mean(value), sd = sd(value), .groups = 'drop')
-
-duration_summary
+  dplyr::summarise(mean = mean(value, na.rm = TRUE), sd = sd(value, na.rm = TRUE), .groups = 'drop')
 
 #create ggplot
 ggplot(data = duration_summary, mapping = aes(x = symptom, y = mean, fill = outcome)) + 
   geom_bar(stat="identity", position=position_dodge()) + 
   ggtitle("Average number of days patient experienced symptom before admission") +
-  ylab("Days")
+  ylab("Days") + 
+  stat_compare_means(label =  "p.signif", label.x = 1.5)
 ```
+

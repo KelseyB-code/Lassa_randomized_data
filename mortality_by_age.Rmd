@@ -29,7 +29,6 @@ ageGroups <- setDT(lassa)[ , agegroups := cut(basic_information.age,
                                 breaks = agebreaks, 
                                 right = FALSE, 
                                 labels = agelabels)]
-
 ageTotal <- ageGroups %>%
   count(agegroups)
 
@@ -47,7 +46,7 @@ age <- age[-1,]
 ```
 
 ```{r}
-ggplot(age, aes(x=agegroups, y=cfr)) +
+p <- ggplot(age, aes(x=agegroups, y=cfr)) +
   geom_bar(stat="identity", color = "darkred", fill="darkred") +
   geom_text(aes(label=string), vjust=-0.3, size=3.5) +
   xlab("Age group (years)") + 
@@ -55,5 +54,7 @@ ggplot(age, aes(x=agegroups, y=cfr)) +
   ggtitle("Mortality as a function of age in Lassa fever patients") +
   theme_minimal()
 
+p + geom_line(aes(x = agegroups, y = n), group = 1) 
 ```
+
 

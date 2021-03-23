@@ -12,6 +12,7 @@ Load data.
 
 ```{r}
 filename = "C:/Users/kelse/Documents/Year_2/Rotations/Colubri/Lassa_virus/practice_data/commcare-randomized-data-2018-2020.csv"
+
 lassa <- read.csv(filename, header = TRUE, sep = ",")
 ```
 
@@ -64,11 +65,14 @@ duration_summary <- duration_df %>%
   filter(outcome == "died" | outcome == "recovered") %>%
   group_by(outcome, symptom) %>%
   dplyr::summarise(mean = mean(value, na.rm = TRUE), sd = sd(value, na.rm = TRUE), .groups = 'drop')
+duration_summary
+```
 
+```{r}
 #create ggplot
 ggplot(data = duration_summary, mapping = aes(x = symptom, y = mean, fill = outcome)) + 
   geom_bar(stat="identity", position=position_dodge()) + 
-  ggtitle("Average number of days patient experienced symptom before admission") +
+  ggtitle("Average number of days patients experienced symptom before admission") +
   ylab("Days") + 
   stat_compare_means(label =  "p.signif", label.x = 1.5)
 ```

@@ -13,6 +13,7 @@ library(dplyr)
 
 ```{r}
 filename = "C:/Users/kelse/Documents/Year_2/Rotations/Colubri/Lassa_virus/practice_data/commcare-randomized-data-2018-2020.csv"
+
 lassa <- read.csv(filename, header = TRUE, sep = ",")
 ```
 

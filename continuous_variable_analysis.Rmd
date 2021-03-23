@@ -6,13 +6,17 @@ library(dplyr)
 library(textclean)
 library(purrr)
 library(Rmisc)
+library(egg)
 library(questionr)
+library(ggforce)
+library(tidyr)
 ```
 
 Load data from csv file.
 
 ```{r}
-lassa <- read.csv("C:/Users/kelse/Documents/Year_2/Rotations/Colubri/Lassa_virus/practice_data/commcare-randomized-data-2018-2020.csv", header = TRUE, sep = ",")
+filename = "C:/Users/kelse/Documents/Year_2/Rotations/Colubri/Lassa_virus/practice_data/commcare-randomized-data-2018-2020.csv"
+lassa <- read.csv(filename, header = TRUE, sep = ",")
 ```
 
 Subset continuous variables: hematology at admission, vitals at admission, max vitals on first day, blood chemistry at admission, and age. Add outcome to data frame.
@@ -132,6 +136,7 @@ num_scaled <-  cbind("outcome" = outcome_factor,
                      "age" = num2$age/10, 
                      data.frame(map(num2[-c(1,2)], function(x) x/IQR(x,na.rm = TRUE))))
 
+
 glm <- map(num_scaled[-1], function(x) glm(outcome ~ x, data = num_scaled, family = binomial))
 ```
 
@@ -145,7 +150,7 @@ p_value <- format(signif(map_dbl(map(odds, "p"), 2), 2), scientific = FALSE)
 
 odds_string <- paste0(OR, " (",odds_CI_2.5,"-",odds_CI_97.5,")")
 ```
-Make summary table of descriptive data forcontinuous variables
+Make summary table of descriptive data for continuous variables
 
 ```{r}
 summary <- data.frame(cbind(
@@ -155,6 +160,54 @@ summary <- data.frame(cbind(
   "p_value" = p_value, 
   "odds_ratio" = odds_string))
 
-summary
+# print summary table with most significant p values first
+arrange(summary, p_value)
+```
+
+Visual analysis of continuous variables:
+
+```{r}
+# create string to include p value in ggplot title
+names <- row.names(summary)
+p_value_string <- paste0(names, "\n(p = ",summary$p_value,")")
+p_value_string <- c("outcome", p_value_string)
+
+# format data to be used in plot 
+
+names(died) <- p_value_string
+names(survived) <- p_value_string
+
+d <- died[-1] %>%                   
+  gather()
+s <- survived[-1] %>%                   
+  gather()
+```
+
+```{r}
+# create ggplot
+p1 <- ggplot() +
+  geom_density(data = s, (aes(value)), fill='lightblue', color="darkblue") +
+  facet_wrap_paginate(~ key, scales = "free", ncol = 4, nrow = 4, page = 1) + 
+  geom_density(data = d, (aes(value)), fill='red', color="darkred") +
+  facet_wrap_paginate(~ key, scales = "free", ncol = 4, nrow = 4, page = 1)
+p1
+```
+
+```{r}
+p2 <- ggplot() +
+  geom_density(data = s, (aes(value)), fill='lightblue', color="darkblue") +
+  facet_wrap_paginate(~ key, scales = "free", ncol = 4, nrow = 4, page = 2) + 
+  geom_density(data = d, (aes(value)), fill='red', color="darkred") +
+  facet_wrap_paginate(~ key, scales = "free", ncol = 4, nrow = 4, page = 2)
+p2
+```
+
+```{r}
+p3 <- ggplot() +
+  geom_density(data = s, (aes(value)), fill='lightblue', color="darkblue") +
+  facet_wrap_paginate(~ key, scales = "free", ncol = 4, nrow = 4, page = 3) + 
+  geom_density(data = d, (aes(value)), fill='red', color="darkred") +
+  facet_wrap_paginate(~ key, scales = "free", ncol = 4, nrow = 4, page = 3)
+p3
 ```
 

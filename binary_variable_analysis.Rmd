@@ -17,7 +17,9 @@ library(textclean)
 ```
 
 ```{r}
-lassa <- read.csv("C:/Users/kelse/Documents/Year_2/Rotations/Colubri/Lassa_virus/practice_data/commcare-randomized-data-2018-2020.csv", header = TRUE, sep = ",")
+filename = "C:/Users/kelse/Documents/Year_2/Rotations/Colubri/Lassa_virus/practice_data/commcare-randomized-data-2018-2020.csv"
+
+lassa <- read.csv(filename, header = TRUE, sep = ",")
 ```
 
 
@@ -126,17 +128,6 @@ surv_string <- paste(S_total,"/",nrow(survived_bin)," (",S_percent,"%)", sep="")
 died_string <- paste(D_total,"/",nrow(died_bin)," (",D_percent,"%)", sep="")
 ```
 
-Calculate odds ratios for binary variables - example 
-
-(exposed cases x unexposed non-cases) / (exposed non-cases x unexposed cases)
-severe_cns = (6x196)/(50x2) = 11.76
-bleeding = (13x187)/(11x43) = 5.13
-
-
-```{r}
-apply(table(all_bin$bleeding, all_bin$outcome),2,rev)
-```
-
 Reformat outcome variable as an ordered factor 
 
 ```{r}
@@ -168,26 +159,30 @@ binary_table <- binary_table %>%
 binary_table
 ```
 
-Alternative way to calculate values for binary variables: extract symptom information from character variable "clinical_features.before_admission_group.before_admission_symptoms_select."  Use this info to create binary variables to analyze for symptoms at presentation.
+```{r}
+p <- round(data.frame(unlist(p_value)), 6)
+newdata <- cbind(cfba_binary, OP =  all_percent, SP =  S_percent, DP =  D_percent, p = p)
+names(newdata) <- c("name", "Overall", "Survived", "Died",  "p")
+```
 
-This includes patients with all outcomes, not just recovered or died.
+Order according to increasing p value and generate bar plot
+```{r}
+newdata$name <- factor(newdata$name, levels = newdata$name[order(newdata$p)])
+
+nd <- newdata %>%
+  gather("Type", "Value", -name)
+
+Type = c("Overall", "Died", "Survived", "p")
+nd$Type <- factor(nd$Type, ordered = TRUE,  levels = Type)
+```
 
 ```{r}
-symptoms <- c('abdominal_pain', 'fever', 'headache', 'sore_throat', 'vomiting', 'diarrhea', 'myalgia',
-             'neck_stiffness', 'restlessness', 'cough', 'weakness', 'chest_pain', 'dyspnoea', 'deafness', 
-             'jaundice', 'seizure', 'red_eyes', 'dizziness',  'tremor',  'coma', 'confusion', 'other')
-
-#function to create new binary variable from string 
-newbinvar <- function(x) {
-  x <- ifelse(grepl(x, lassa$clinical_features.before_admission_group.before_admission_symptoms_select), 1, 0)
-}
-
-#create new data frame with binary variables
-binary1 <- map(symptoms, newbinvar)
-names(binary1) <- symptoms
-binary1 <- data.frame(binary1)
-
-binary <- cbind(lassa$clinical_features.before_admission_group.before_admission_symptoms_select, binary1)
-b <-  map_df(binary[-1], as.numeric)
-data.frame(colSums(b))
+ggplot(subset(nd, Type %in% c("Overall" , "Died", "Survived")), aes(name, Value, fill = Type)) +
+  geom_bar(position = "dodge", stat = "identity", colour="black") +
+  scale_fill_manual(values=c("palegreen3", "coral2", "steelblue2")) +
+  theme_bw() +
+  ylab("Prevalence (%)") +
+  xlab("Complication during treatment in hospital") +
+  ylim(0, 100) +
+  ggtitle("Prevalence of complications in patients diagnosed with Lassa fever")
 ```

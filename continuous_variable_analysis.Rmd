@@ -6,7 +6,6 @@ library(dplyr)
 library(textclean)
 library(purrr)
 library(Rmisc)
-library(egg)
 library(questionr)
 library(ggforce)
 library(tidyr)
@@ -16,6 +15,7 @@ Load data from csv file.
 
 ```{r}
 filename = "C:/Users/kelse/Documents/Year_2/Rotations/Colubri/Lassa_virus/practice_data/commcare-randomized-data-2018-2020.csv"
+
 lassa <- read.csv(filename, header = TRUE, sep = ",")
 ```
 

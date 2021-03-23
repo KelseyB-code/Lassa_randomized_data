@@ -54,7 +54,7 @@ p <- ggplot(age, aes(x=agegroups, y=cfr)) +
   ggtitle("Mortality as a function of age in Lassa fever patients") +
   theme_minimal()
 
-p + geom_line(aes(x = agegroups, y = n), group = 1) 
+p + geom_line(aes(x = agegroups, y = n), color = 'black', group = 1) 
 ```
 
 

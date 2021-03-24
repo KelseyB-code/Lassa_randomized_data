@@ -3,6 +3,7 @@ title: "Mortality as a function of age in Lassa fever patients"
 ---
 
 ```{r}
+rm(list=ls())
 library(data.table)
 library(stringr)
 library(dplyr)
@@ -30,11 +31,11 @@ ageGroups <- setDT(lassa)[ , agegroups := cut(basic_information.age,
                                 right = FALSE, 
                                 labels = agelabels)]
 ageTotal <- ageGroups %>%
-  count(agegroups)
+  count(ageGroups$agegroups)
 
 ageSum <- ageGroups %>%
   filter(str_detect(clinical_outcome.outcome, "recovered")) %>%
-  count(agegroups)
+  count(ageGroups$agegroups)
 
 names(ageSum) <- c("agegroups", "live")
 
@@ -54,7 +55,11 @@ p <- ggplot(age, aes(x=agegroups, y=cfr)) +
   ggtitle("Mortality as a function of age in Lassa fever patients") +
   theme_minimal()
 
-p + geom_line(aes(x = agegroups, y = n), color = 'black', group = 1) 
+p <- p + geom_line(aes(x = agegroups, y = n), color = 'black', group = 1) 
+
+pdf("./lassa_fever_analysis/mortality_by_age.pdf")
+p
+dev.off()
 ```
 
 

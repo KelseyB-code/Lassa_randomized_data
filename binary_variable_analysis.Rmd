@@ -157,6 +157,10 @@ names(binary_table) <- c("Symptom", "Overall", "Survived", "Died", "p_value", "o
 binary_table <- binary_table %>%
   arrange(p_value)
 binary_table
+
+# save output to csv
+dir.create("lassa_fever_analysis")
+write.csv(binary_table, "./lassa_fever_analysis/symptoms_before_admission.csv")
 ```
 
 ```{r}
@@ -177,12 +181,18 @@ nd$Type <- factor(nd$Type, ordered = TRUE,  levels = Type)
 ```
 
 ```{r}
-ggplot(subset(nd, Type %in% c("Overall" , "Died", "Survived")), aes(name, Value, fill = Type)) +
+p <- ggplot(subset(nd, Type %in% c("Overall" , "Died", "Survived")), aes(name, Value, fill = Type)) +
   geom_bar(position = "dodge", stat = "identity", colour="black") +
   scale_fill_manual(values=c("palegreen3", "coral2", "steelblue2")) +
   theme_bw() +
   ylab("Prevalence (%)") +
   xlab("Complication during treatment in hospital") +
   ylim(0, 100) +
-  ggtitle("Prevalence of complications in patients diagnosed with Lassa fever")
+  ggtitle("Prevalence of complications in patients diagnosed with Lassa fever") + 
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+
+# save output to pdf
+pdf("./lassa_fever_analysis/symptoms_before_admission_prevalence.pdf")
+p
+dev.off()
 ```

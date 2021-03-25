@@ -127,23 +127,29 @@ outcome.pred <- factor(outcome.pred, levels = c(TRUE, FALSE))
 # generate a confusion matrix to evaluate accuracy of the model 
 confusionMatrix(outcome.pred, outcome)
 ```
+Calculate AUC
 
 ```{r}
 roc_pred <- prediction(predictions = p  , labels = outcome)
 roc_perf <- performance(roc_pred , "tpr" , "fpr")
 
+auc_ROCR <- performance(roc_pred, measure = "auc")
+auc_ROCR <- auc_ROCR@y.values[[1]]
+```
+
+Plot ROC
+
+```{r}
 plot(roc_perf,
      colorize = TRUE)
+rect(0, 1.1, 1, 1.7, xpd=TRUE, col="white", border="white")
+title(paste0("AUC = ",round(auc_ROCR,2)))
 
+dir.create("lassa_fever_analysis")
 pdf("./lassa_fever_analysis/ROC_model_validation_symptoms_at_presentation.pdf")
 plot(roc_perf,
      colorize = TRUE)
+rect(0, 1.1, 1, 1.7, xpd=TRUE, col="white", border="white")
+title(paste0("AUC = ",round(auc_ROCR,2)))
 dev.off()
 ```
-
-```{r}
-auc_ROCR <- performance(roc_pred, measure = "auc")
-auc_ROCR <- auc_ROCR@y.values[[1]]
-paste0("The AUC is ",round(auc_ROCR,2))
-```
-

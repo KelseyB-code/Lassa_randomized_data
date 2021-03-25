@@ -3,7 +3,7 @@ title: "Validating LF prognostic model on a new dataset"
 ---
 
 ```{r}
-library(dplyr)
+library(dplyr) 
 library(textclean)
 library(purrr)
 library(ROCR)

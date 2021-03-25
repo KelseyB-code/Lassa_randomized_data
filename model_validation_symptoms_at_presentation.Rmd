@@ -130,7 +130,7 @@ confusionMatrix(outcome.pred, outcome)
 Calculate AUC
 
 ```{r}
-roc_pred <- prediction(predictions = p  , labels = outcome)
+roc_pred <- prediction(predictions = p  , labels = outcome) 
 roc_perf <- performance(roc_pred , "tpr" , "fpr")
 
 auc_ROCR <- performance(roc_pred, measure = "auc")

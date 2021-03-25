@@ -162,6 +162,9 @@ summary <- data.frame(cbind(
 
 # print summary table with most significant p values first
 arrange(summary, p_value)
+
+dir.create("lassa_fever_analysis")
+write.csv(summary, "./lassa_fever_analysis/continuous_variable_summary.csv")
 ```
 
 Visual analysis of continuous variables:
@@ -191,6 +194,10 @@ p1 <- ggplot() +
   geom_density(data = d, (aes(value)), fill='red', color="darkred") +
   facet_wrap_paginate(~ key, scales = "free", ncol = 4, nrow = 4, page = 1)
 p1
+
+pdf("./lassa_fever_analysis/continuous_plot1.pdf")
+p1
+dev.off()
 ```
 
 ```{r}
@@ -200,6 +207,10 @@ p2 <- ggplot() +
   geom_density(data = d, (aes(value)), fill='red', color="darkred") +
   facet_wrap_paginate(~ key, scales = "free", ncol = 4, nrow = 4, page = 2)
 p2
+
+pdf("./lassa_fever_analysis/continuous_plot2.pdf")
+p2
+dev.off()
 ```
 
 ```{r}
@@ -209,5 +220,15 @@ p3 <- ggplot() +
   geom_density(data = d, (aes(value)), fill='red', color="darkred") +
   facet_wrap_paginate(~ key, scales = "free", ncol = 4, nrow = 4, page = 3)
 p3
+
+pdf("./lassa_fever_analysis/continuous_plot3.pdf")
+p3
+dev.off()
+```
+
+```{r}
+pdf("test.pdf")
+plots <- c(p1, p2, p3)
+dev.off()
 ```
 

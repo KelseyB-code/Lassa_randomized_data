@@ -55,13 +55,12 @@ bleeding_all = eyes_bleeding, hematemesis (vomiting blood), hematochezia (blood 
 
 ```{r}
 #subset bleeding variables and sum values in new variable, don't include eyes_bleeding
-bleeding <- dur[,c(1,2,3,5,6,7,8,9)]
+bleeding <-  dur[,c("eyes_bleeding", "hematemesis_bleeding", "hematochezia_bleeding", "hemoptysis_bleeding", "injection_sites_bleeding", "mouth_bleeding", "nostrils_bleeding", "vaginal_bleeding")]
 bleeding <- data.frame(rowSums(bleeding))
 bleeding[bleeding > 1] <- 1
 
 #subset severe cns variables and sum values in new variable
-severe_cns_names <- c("coma", "seizures", "tremors", "confusion")
-severe_cns <- dur[,severe_cns_names]
+severe_cns <- dur[,c("coma", "seizures", "tremors", "confusion")]
 severe_cns <- data.frame(rowSums(severe_cns))
 severe_cns[severe_cns > 1] <- 1
 ```
@@ -83,9 +82,9 @@ dur <-  rename_with(dur, ~gsub("rowSums.", "", .x))
 Remove variables where all values are 0 and output list of symptoms that are removed.
 
 ```{r}
-dur <-dur[, colSums(dur != 0) > 0]
-
 names(dur[, colSums(dur != 0) == 0])
+
+dur <-dur[, colSums(dur != 0) > 0]
 ```
 
 

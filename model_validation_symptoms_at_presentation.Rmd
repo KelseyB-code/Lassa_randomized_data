@@ -16,7 +16,8 @@ https://stats.idre.ucla.edu/other/mult-pkg/faq/general/faq-how-do-i-interpret-od
 Load data.
 
 ```{r}
-filename = "C:/Users/kelse/Documents/Year_2/Rotations/Colubri/Lassa_virus/practice_data/commcare-randomized-data-2018-2020.csv"
+#filename = "C:/Users/kelse/Documents/Year_2/Rotations/Colubri/Lassa_virus/practice_data/commcare-randomized-data-2018-2020.csv"
+filename = "../../commcare-data/commcare-deidentified-data-2018-2020.csv"
 
 lassa_raw <- read.csv(filename, header = TRUE, sep = ",")
 ```

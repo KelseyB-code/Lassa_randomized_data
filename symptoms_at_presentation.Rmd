@@ -17,7 +17,8 @@ library(textclean)
 ```
 
 ```{r}
-filename = "C:/Users/kelse/Documents/Year_2/Rotations/Colubri/Lassa_virus/practice_data/commcare-randomized-data-2018-2020.csv"
+#filename = "C:/Users/kelse/Documents/Year_2/Rotations/Colubri/Lassa_virus/practice_data/commcare-randomized-data-2018-2020.csv"
+filename = "../../commcare-data/commcare-deidentified-data-2018-2020.csv"
 
 lassa <- read.csv(filename, header = TRUE, sep = ",")
 ```
@@ -198,9 +199,9 @@ p <- ggplot(subset(nd, Type %in% c("Overall" , "Died", "Survived")), aes(name, V
   theme_bw() +
   ylab("Prevalence (%)") +
   xlab("Complication during treatment in hospital") +
-  ylim(0, 100) +
+  ylim(0, 30) +
   ggtitle("Prevalence of complications in patients diagnosed with Lassa fever") + 
-  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))
 p
 
 # save output to pdf

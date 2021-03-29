@@ -1,0 +1,340 @@
+---
+title: "Validating LF prognostic models - model #1 (lab-full)"
+---
+
+```{r}
+library(dplyr) 
+library(textclean)
+library(purrr)
+library(ROCR)
+library(caret)
+```
+
+Load data.
+
+```{r}
+filename = "C:/Users/kelse/Documents/Year_2/Rotations/Colubri/Lassa_virus/practice_data/commcare-randomized-data-2018-2020.csv"
+
+lassa_raw <- read.csv(filename, header = TRUE, sep = ",")
+```
+
+Only include observations where outcome is known.
+
+```{r}
+lassa <- lassa_raw %>%
+  filter(clinical_outcome.outcome == "recovered" | clinical_outcome.outcome == "died")
+```
+
+Define variables in new data
+```{r}
+outcome <- lassa$clinical_outcome.outcome
+age <- lassa$basic_information.age
+ast <- lassa$blood_chemistry_list.aspartate_aminotransferase_ast.0
+cre <- lassa$blood_chemistry_list.creatinine.0
+k <- lassa$blood_chemistry_list.potassium.0
+tbil <- lassa$blood_chemistry_list.total_bilirubin.0
+plt <- lassa$hematology_list.platelet.0
+wbc <- lassa$hematology_list.white_cell_count.0
+bun <- lassa$blood_chemistry_list.blood_urea_nitrogen.0
+hct <- lassa$hematology_list.haematocrit_concentration.0
+lym <- lassa$hematology_list.lymphocytes.0
+tpro <- lassa$blood_chemistry_list.total_protein.0
+
+newdata <- cbind.data.frame(outcome, age, ast, cre, k, tbil, plt, wbc, bun, hct, lym, tpro)
+```
+
+###### Test model #1 (lab-full)
+
+```{r}
+intercept <- -5.736604643 
+age <- 0.035540840 
+ast <- .003186223 
+cre <- 0.130760630 
+k <- 0.914579133 
+tbil <- 0.015229333 
+plt <- 0.001630707
+tpro <- -0.353872521
+
+age_val <- unlist(map(newdata$age, function(x) x * age))
+ast_val <- unlist(map(newdata$ast, function(x) x * ast))
+cre_val <- unlist(map(newdata$cre, function(x) x * cre))
+k_val <- unlist(map(newdata$k, function(x) x * k))
+tbil_val <- unlist(map(newdata$tbil, function(x) x * tbil))
+plt_val <- unlist(map(newdata$plt, function(x) x * plt))
+tpro_val <- unlist(map(newdata$tpro, function(x) x * tpro))
+
+coef <- cbind.data.frame(age_val, ast_val, cre_val, k_val, tbil_val, plt_val, tpro_val)
+
+coef_sum <- rowSums(coef, na.rm = TRUE)
+coef_sum <- coef_sum + intercept
+```
+
+```{r}
+num <- exp(coef_sum)
+denom <- 1 + exp(coef_sum)
+p <- num/denom
+```
+
+Graph ROC and calculate AUC.
+
+```{r}
+# format actual outcome values so died = TRUE
+outcome <- ifelse(lassa$clinical_outcome.outcome == "died", TRUE, FALSE)
+outcome <- factor(outcome, levels = c(TRUE,FALSE))
+
+# format predicted outcomes so p > 0.5 = TRUE
+outcome.pred <- ifelse(p > 0.5, TRUE, FALSE)
+outcome.pred <- factor(outcome.pred, levels = c(TRUE, FALSE))
+
+# model 1 statistics 
+confusionMatrix(outcome.pred, outcome)
+```
+
+
+Calculate AUC
+
+```{r}
+roc_pred <- prediction(predictions = p  , labels = outcome)
+roc_perf <- performance(roc_pred , "tpr" , "fpr")
+
+auc_ROCR <- performance(roc_pred, measure = "auc")
+auc_ROCR <- auc_ROCR@y.values[[1]]
+```
+
+Plot ROC
+
+```{r}
+plot(roc_perf,
+     colorize = TRUE)
+rect(0, 1.1, 1, 1.7, xpd=TRUE, col="white", border="white")
+title(paste0("AUC = ",round(auc_ROCR,2)))
+
+dir.create("lassa_fever_analysis")
+pdf("./lassa_fever_analysis/ROC_model_validation_1_lab-full.pdf")
+plot(roc_perf,
+     colorize = TRUE)
+rect(0, 1.1, 1, 1.7, xpd=TRUE, col="white", border="white")
+title(paste0("AUC = ",round(auc_ROCR,2)))
+dev.off()
+```
+
+###### Test model #2 (lab-full-HCT)
+
+
+```{r}
+intercept <- -7.7053943935 
+age <- 0.0320132683
+ast <- 0.0014895123
+bun <- 0.0290322460 
+k <- 0.4141768473 
+hct <- 0.0582328918 
+plt <- 0.0007336732 
+lym <- -0.0006977108 
+
+age_val <- unlist(map(newdata$age, function(x) x * age))
+ast_val <- unlist(map(newdata$ast, function(x) x * ast))
+bun_val <- unlist(map(newdata$bun, function(x) x * bun))
+k_val <- unlist(map(newdata$k, function(x) x * k))
+hct_val <- unlist(map(newdata$hct, function(x) x * hct))
+plt_val <- unlist(map(newdata$plt, function(x) x * plt))
+lym_val <- unlist(map(newdata$lym, function(x) x * lym))
+
+coef <- cbind.data.frame(age_val, ast_val, bun_val, k_val, hct_val, plt_val, lym_val)
+
+coef_sum <- rowSums(coef, na.rm = TRUE)
+coef_sum <- coef_sum + intercept
+```
+
+```{r}
+num <- exp(coef_sum)
+denom <- 1 + exp(coef_sum)
+p <- num/denom
+```
+
+Graph ROC and calculate AUC.
+
+```{r}
+# format actual outcome values so died = TRUE
+outcome <- ifelse(lassa$clinical_outcome.outcome == "died", TRUE, FALSE)
+outcome <- factor(outcome, levels = c(TRUE,FALSE))
+
+# format predicted outcomes so p > 0.5 = TRUE
+outcome.pred <- ifelse(p > 0.5, TRUE, FALSE)
+outcome.pred <- factor(outcome.pred, levels = c(TRUE, FALSE))
+
+# model 2 statistics 
+confusionMatrix(outcome.pred, outcome)
+```
+
+
+Calculate AUC
+
+```{r}
+roc_pred <- prediction(predictions = p  , labels = outcome)
+roc_perf <- performance(roc_pred , "tpr" , "fpr")
+
+auc_ROCR <- performance(roc_pred, measure = "auc")
+auc_ROCR <- auc_ROCR@y.values[[1]]
+```
+
+Plot ROC
+
+```{r}
+plot(roc_perf,
+     colorize = TRUE)
+rect(0, 1.1, 1, 1.7, xpd=TRUE, col="white", border="white")
+title(paste0("AUC = ",round(auc_ROCR,2)))
+
+dir.create("lassa_fever_analysis")
+pdf("./lassa_fever_analysis/ROC_model_validation_2_lab-full-HCT.pdf")
+plot(roc_perf,
+     colorize = TRUE)
+rect(0, 1.1, 1, 1.7, xpd=TRUE, col="white", border="white")
+title(paste0("AUC = ",round(auc_ROCR,2)))
+dev.off()
+```
+
+###### Test model #3 (lab-full-WBC)
+
+```{r}
+
+intercept <- -7.632576915
+age <- 0.038183853 
+ast <- 0.002634452 
+cre <- 0.165733651 
+k <- 0.804933574 
+tbil <- -0.002499645
+plt <- 0.001121809 
+wbc <- 0.020097665 
+
+age_val <- unlist(map(newdata$age, function(x) x * age))
+ast_val <- unlist(map(newdata$ast, function(x) x * ast))
+cre_val <- unlist(map(newdata$cre, function(x) x * cre))
+k_val <- unlist(map(newdata$k, function(x) x * k))
+tbil_val <- unlist(map(newdata$tbil, function(x) x * tbil))
+plt_val <- unlist(map(newdata$plt, function(x) x * plt))
+wbc_val <- unlist(map(newdata$wbc, function(x) x * wbc))
+
+coef <- cbind.data.frame(age_val, ast_val, cre_val, k_val, tbil_val, plt_val, wbc_val)
+
+coef_sum <- rowSums(coef, na.rm = TRUE)
+coef_sum <- coef_sum + intercept
+```
+
+```{r}
+num <- exp(coef_sum)
+denom <- 1 + exp(coef_sum)
+p <- num/denom
+```
+
+Graph ROC and calculate AUC.
+
+```{r}
+# format actual outcome values so died = TRUE
+outcome <- ifelse(lassa$clinical_outcome.outcome == "died", TRUE, FALSE)
+outcome <- factor(outcome, levels = c(TRUE,FALSE))
+
+# format predicted outcomes so p > 0.5 = TRUE
+outcome.pred <- ifelse(p > 0.5, TRUE, FALSE)
+outcome.pred <- factor(outcome.pred, levels = c(TRUE, FALSE))
+
+# model 3 statistics 
+confusionMatrix(outcome.pred, outcome)
+```
+
+
+Calculate AUC
+
+```{r}
+roc_pred <- prediction(predictions = p  , labels = outcome)
+roc_perf <- performance(roc_pred , "tpr" , "fpr")
+
+auc_ROCR <- performance(roc_pred, measure = "auc")
+auc_ROCR <- auc_ROCR@y.values[[1]]
+```
+
+Plot ROC
+
+```{r}
+plot(roc_perf,
+     colorize = TRUE)
+rect(0, 1.1, 1, 1.7, xpd=TRUE, col="white", border="white")
+title(paste0("AUC = ",round(auc_ROCR,2)))
+
+dir.create("lassa_fever_analysis")
+pdf("./lassa_fever_analysis/ROC_model_validation_3_lab-full-WBC.pdf")
+plot(roc_perf,
+     colorize = TRUE)
+rect(0, 1.1, 1, 1.7, xpd=TRUE, col="white", border="white")
+title(paste0("AUC = ",round(auc_ROCR,2)))
+dev.off()
+```
+
+###### Test model #4 (lab-min)
+
+```{r}
+intercept <- -7.65790869
+age <- 0.03383892
+ast <- 0.00235515 
+cre <- 0.14720373 
+k <- 0.74449735 
+
+age_val <- unlist(map(newdata$age, function(x) x * age))
+ast_val <- unlist(map(newdata$ast, function(x) x * ast))
+cre_val <- unlist(map(newdata$cre, function(x) x * cre))
+k_val <- unlist(map(newdata$k, function(x) x * k))
+
+coef <- cbind.data.frame(age_val, ast_val, cre_val, k_val)
+
+coef_sum <- rowSums(coef, na.rm = TRUE)
+coef_sum <- coef_sum + intercept
+```
+
+```{r}
+num <- exp(coef_sum)
+denom <- 1 + exp(coef_sum)
+p <- num/denom
+```
+
+Graph ROC and calculate AUC.
+
+```{r}
+# format actual outcome values so died = TRUE
+outcome <- ifelse(lassa$clinical_outcome.outcome == "died", TRUE, FALSE)
+outcome <- factor(outcome, levels = c(TRUE,FALSE))
+
+# format predicted outcomes so p > 0.5 = TRUE
+outcome.pred <- ifelse(p > 0.5, TRUE, FALSE)
+outcome.pred <- factor(outcome.pred, levels = c(TRUE, FALSE))
+
+# model 4 statistics 
+confusionMatrix(outcome.pred, outcome)
+```
+
+
+Calculate AUC
+
+```{r}
+roc_pred <- prediction(predictions = p  , labels = outcome)
+roc_perf <- performance(roc_pred , "tpr" , "fpr")
+
+auc_ROCR <- performance(roc_pred, measure = "auc")
+auc_ROCR <- auc_ROCR@y.values[[1]]
+```
+
+Plot ROC
+
+```{r}
+plot(roc_perf,
+     colorize = TRUE)
+rect(0, 1.1, 1, 1.7, xpd=TRUE, col="white", border="white")
+title(paste0("AUC = ",round(auc_ROCR,2)))
+
+dir.create("lassa_fever_analysis")
+pdf("./lassa_fever_analysis/ROC_model_validation_4_lab-min.pdf")
+plot(roc_perf,
+     colorize = TRUE)
+rect(0, 1.1, 1, 1.7, xpd=TRUE, col="white", border="white")
+title(paste0("AUC = ",round(auc_ROCR,2)))
+dev.off()
+```

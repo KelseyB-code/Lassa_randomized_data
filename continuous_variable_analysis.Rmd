@@ -153,7 +153,7 @@ odds_string <- paste0(OR, " (",odds_CI_2.5,"-",odds_CI_97.5,")")
 Make summary table of descriptive data for continuous variables
 
 ```{r}
-summary <- data.frame(cbind(
+summary <- data.frame(cbind("name" = names(p_value),
   "patients_who_survived" = string_means$survived_mean, 
   "patients_who_died" = string_means$died_mean, 
   "missing" = missing_string, 

@@ -16,8 +16,8 @@ https://stats.idre.ucla.edu/other/mult-pkg/faq/general/faq-how-do-i-interpret-od
 Load data.
 
 ```{r}
-#filename = "C:/Users/kelse/Documents/Year_2/Rotations/Colubri/Lassa_virus/practice_data/commcare-randomized-data-2018-2020.csv"
-filename = "../../commcare-data/commcare-deidentified-data-2018-2020.csv"
+filename = "C:/Users/kelse/Documents/Year_2/Rotations/Colubri/Lassa_virus/practice_data/commcare-randomized-data-2018-2020.csv"
+#filename = "../../commcare-data/commcare-deidentified-data-2018-2020.csv"
 
 lassa_raw <- read.csv(filename, header = TRUE, sep = ",")
 ```
@@ -66,6 +66,7 @@ severe_cns[severe_cns > 1] <- 1
 Subset variables from new dataset that were included in the original model.
 
 ```{r}
+outcome <- lassa$clinical_outcome.outcome
 age <- lassa$basic_information.age
 severe_cns <- severe_cns$rowSums.severe_cns.
 bleeding <- bleeding$rowSums.bleeding.
@@ -74,8 +75,12 @@ ast <- lassa$blood_chemistry_list.aspartate_aminotransferase_ast.0
 cr <- lassa$blood_chemistry_list.creatinine.0
 k <- lassa$blood_chemistry_list.potassium.0
 
-newdata <- data.frame(cbind(age, severe_cns, bleeding, jaundice, ast, cr,  k))
-newdata <- map_df(newdata, as.numeric)
+newdata_num <- data.frame(cbind(age, severe_cns, bleeding, jaundice, ast, cr,  k))
+newdata_num <- map_df(newdata_num, as.numeric)
+newdata_all <- data.frame(cbind(outcome, newdata_num))
+
+# only include complete cases
+newdata <- na.omit(newdata_all)
 ```
 
 Validate prognostic model published in Okokhere et al. The Lancet (2018). The logistic regression coefficients are as follows:
@@ -118,7 +123,7 @@ Graph ROC and calculate AUC.
 
 ```{r}
 # format actual outcome values so died = TRUE
-outcome <- ifelse(lassa$clinical_outcome.outcome == "died", TRUE, FALSE)
+outcome <- ifelse(newdata$outcome == "died", TRUE, FALSE)
 outcome <- factor(outcome, levels = c(TRUE, FALSE))
 
 # format predicted outcomes so p > 0.5 = TRUE

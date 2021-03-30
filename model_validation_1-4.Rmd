@@ -8,6 +8,7 @@ library(textclean)
 library(purrr)
 library(ROCR)
 library(caret)
+library(tidyr)
 ```
 
 Load data.
@@ -40,12 +41,14 @@ hct <- lassa$hematology_list.haematocrit_concentration.0
 lym <- lassa$hematology_list.lymphocytes.0
 tpro <- lassa$blood_chemistry_list.total_protein.0
 
-newdata <- cbind.data.frame(outcome, age, ast, cre, k, tbil, plt, wbc, bun, hct, lym, tpro)
+newdata_all <- cbind.data.frame(outcome, age, ast, cre, k, tbil, plt, wbc, bun, hct, lym, tpro)
 ```
 
 ###### Test model #1 (lab-full)
 
 ```{r}
+# format data for model 1
+newdata <- drop_na(newdata_all, c(age, ast, cre, k, tbil, plt, tpro))
 intercept <- -5.736604643 
 age <- 0.035540840 
 ast <- .003186223 
@@ -122,6 +125,7 @@ dev.off()
 
 
 ```{r}
+newdata <- drop_na(newdata_all, c(age, ast, bun, k, hct, plt, lym))
 intercept <- -7.7053943935 
 age <- 0.0320132683
 ast <- 0.0014895123
@@ -197,7 +201,7 @@ dev.off()
 ###### Test model #3 (lab-full-WBC)
 
 ```{r}
-
+newdata <- drop_na(newdata_all, c(age, ast, cre, k, tbil, plt, wbc))
 intercept <- -7.632576915
 age <- 0.038183853 
 ast <- 0.002634452 
@@ -273,6 +277,7 @@ dev.off()
 ###### Test model #4 (lab-min)
 
 ```{r}
+newdata <- drop_na(newdata_all, c(age, ast, cre, k))
 intercept <- -7.65790869
 age <- 0.03383892
 ast <- 0.00235515 

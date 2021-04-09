@@ -2,11 +2,12 @@ Load packages.
 ```{r}
 library(dplyr)
 library(tidyr)
+library(ggplot2)
 ```
 
 Load data.
 ```{r}
-filename = "C:/Users/kelse/Documents/Year_2/Rotations/Colubri/Lassa_virus/practice_data/commcare-randomized-data-2018-2020.csv"
+filename = "C:/Users/kelse/Documents/Year_2/Rotations/Colubri/Lassa_virus/practice_data/commcare-randomized-data-2018-2020_2.csv"
 
 lassa <- read.csv(filename, header = TRUE, sep = ",")
 
@@ -62,6 +63,10 @@ long_data <- rbind(day0, day1, day2, day3, day4, day5, day6)
 long_data$ID <- as.numeric(as.character(long_data$ID))
 long_data$outcome <- as.factor(long_data$clinical_outcome.outcome)
 
+#format day variable
+long_data$day <- gsub(" days", "",  long_data$day)
+long_data$day <- as.numeric(long_data$day)
+
 #arrange data by ID
 long_data <- arrange(long_data[c(1,6,4,5,3)], ID)
 long_data$ID <- as.factor(long_data$ID)
@@ -72,25 +77,43 @@ long_data <- distinct(long_data) #remove duplicates
 long_data <- long_data[complete.cases(long_data), ] #keep complete cases
 ```
 
-Explore data. In my data there were no IDs with >1 value for creatinine test, so there might not be any longitudinal data. How does it look in the real data?
+Visually inspect data.
 ```{r}
-long_data
+head(long_data, 10)
 ```
+
 
 Print number of tests associated with each ID.
 ```{r}
 z <- data.frame(table(long_data$ID))
 table(z$Freq)
 ```
-Go back and visually inspect the raw data to see if I missed something.
+
+Subset data to include only patients that have 2 or more tests.
 
 ```{r}
-long_data_raw
+newdata <-long_data %>% 
+  group_by(ID) %>% 
+  filter(n()==2 | n() == 3)
+newdata
 ```
 
-Look at values that change across rows in original data.
+Graph the results
+
 ```{r}
-lassa %>%
-  select(contains("creatinine"))
+# Plot the longitudinal profiles for the  selected patients
+ggplot(data = newdata, aes(x = day, y = val, group = ID, colour = outcome)) +
+  geom_line(aes(color = as.factor(outcome), linetype = as.factor(outcome)), size = 0.7) +
+  scale_linetype_manual(values = c("longdash", "solid")) + 
+  scale_color_manual(values = c("black", "red")) + theme_bw() +
+  theme(legend.position = "", panel.border = element_blank(), panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(), axis.line = element_line(colour = "black")) + 
+  labs(x = "day", y = "Creatinine", colour = "outcome ")
+```
+
+
+```{r}
+library(dplyr)
+
 ```
 

@@ -1,0 +1,149 @@
+---
+title: "Validating LF prognostic model on a new dataset"
+---
+
+```{r}
+library(dplyr)
+library(textclean)
+library(purrr)
+library(ROCR)
+library(caret)
+```
+
+I used this tutorial to guide my interpretation of logistic regression coefficients:
+https://stats.idre.ucla.edu/other/mult-pkg/faq/general/faq-how-do-i-interpret-odds-ratios-in-logistic-regression/
+
+Load data.
+
+```{r}
+filename = "C:/Users/kelse/Documents/Year_2/Rotations/Colubri/Lassa_virus/practice_data/commcare-randomized-data-2018-2020.csv"
+#filename = "../../commcare-data/commcare-deidentified-data-2018-2020.csv"
+
+lassa_raw <- read.csv(filename, header = TRUE, sep = ",")
+```
+
+Format data.
+
+```{r}
+# Only include observations where outcome is known
+lassa <- lassa_raw %>%
+  filter(clinical_outcome.outcome == "recovered" | clinical_outcome.outcome == "died")
+
+# subset data and format variable names
+dur <- lassa %>%
+  select(contains("_during_admission"))
+
+names(dur) <-  mgsub(names(dur), c(
+  "clinical_factors.before_admission_bleeding_question_group.bleeding_duration.",
+  "_during_admission",
+  "clinical_factors.during_admission_symptom_duration.",
+  "clinical_factors.additional_clinical_feature_duration.",
+  "complications.complications_duration.",
+  "_duration.symptom"), c("", "", "", "", "", ""))
+
+# convert all values containing "d1" to 1
+dur <- map_df(dur, function(x) ifelse(grepl("d1", x), 1, 0))
+```
+
+Combine some variables as described in Okokhere et al.
+Severe CNS features = coma, seizure, tremors, confusion 
+Non-severe CNS features = dizziness, lethargy, drowsiness (no lethargy or drowsiness in this dataset)
+
+bleeding_all = eyes_bleeding, hematemesis (vomiting blood), hematochezia (blood in stool), hemoptysis (coughing up blood), injection_sites_bleeding, mouth_bleeding, nostril_bleeding, vaginal_bleeding, other_bleeding
+
+```{r}
+#subset bleeding variables and sum values in new variable, don't include eyes_bleeding
+bleeding <-  dur[,c("eyes_bleeding", "hematemesis_bleeding", "hematochezia_bleeding", "hemoptysis_bleeding", "injection_sites_bleeding", "mouth_bleeding", "nostrils_bleeding", "vaginal_bleeding", "other_bleeding")]
+
+bleeding <- data.frame(rowSums(bleeding))
+bleeding[bleeding > 1] <- 1
+
+#subset severe cns variables and sum values in new variable
+severe_cns <- dur[,c("coma", "seizures", "tremors", "confusion")]
+severe_cns <- data.frame(rowSums(severe_cns))
+severe_cns[severe_cns > 1] <- 1
+```
+
+Subset variables from new dataset that were included in the original model.
+
+```{r}
+outcome <- lassa$clinical_outcome.outcome
+age <- lassa$basic_information.age
+severe_cns <- severe_cns$rowSums.severe_cns.
+bleeding <- bleeding$rowSums.bleeding.
+ast <- lassa$blood_chemistry_list.aspartate_aminotransferase_ast.0
+cr <- lassa$blood_chemistry_list.creatinine.0
+k <- lassa$blood_chemistry_list.potassium.0
+
+newdata_num <- data.frame(cbind(age, severe_cns, bleeding, ast, cr))
+newdata_num <- map_df(newdata_num, as.numeric)
+newdata_all <- data.frame(cbind(outcome, newdata_num))
+
+# only include complete cases
+newdata <- na.omit(newdata_all)
+```
+
+Validate prognostic model published in Okokhere et al. The Lancet (2018). The logistic regression coefficients are as follows:
+
+```{r}
+intercept <- -4.311156675
+age_val <- unlist(map(newdata$age, function(x) x * 0.035277727))
+severe_cns_val <- unlist(map(newdata$severe_cns,  function(x) x * 1.429050048))
+bleeding_val <-  unlist(map(newdata$bleeding, function(x) x * 0.768763947))
+ast_val <- unlist(map(newdata$ast,  function(x) x * 0.003146318))
+cr_val <- unlist(map(newdata$cr, function(x) x * 0.174740591))
+
+coef_df <- cbind.data.frame(age_val, severe_cns_val, bleeding_val, ast_val, cr_val)
+
+coef_sum <- rowSums(coef_df,  na.rm = TRUE)
+coef_sum <- coef_sum + intercept
+```
+
+Use the sum of the predictor values * coefficients to calculate the probability that outcome = 1 (died). Set the threshold at 0.5.
+
+```{r}
+num <- exp(coef_sum)
+denom <- 1 + exp(coef_sum)
+p <- num/denom
+```
+
+Graph ROC and calculate AUC.
+
+```{r}
+# format actual outcome values so died = TRUE
+outcome <- ifelse(newdata$outcome == "died", TRUE, FALSE)
+outcome <- factor(outcome, levels = c(TRUE, FALSE))
+
+# format predicted outcomes so p > 0.5 = TRUE
+outcome.pred <- ifelse(p > 0.5, TRUE, FALSE)
+outcome.pred <- factor(outcome.pred, levels = c(TRUE, FALSE))
+
+# generate a confusion matrix to evaluate accuracy of the model 
+confusionMatrix(outcome.pred, outcome)
+```
+Calculate AUC
+
+```{r}
+roc_pred <- prediction(predictions = p  , labels = outcome) 
+roc_perf <- performance(roc_pred , "tpr" , "fpr")
+
+auc_ROCR <- performance(roc_pred, measure = "auc")
+auc_ROCR <- auc_ROCR@y.values[[1]]
+```
+
+Plot ROC
+
+```{r}
+plot(roc_perf,
+     colorize = TRUE)
+rect(0, 1.1, 1, 1.7, xpd=TRUE, col="white", border="white")
+title(paste0("AUC = ",round(auc_ROCR,2)))
+
+dir.create("lassa_fever_analysis")
+pdf("./lassa_fever_analysis/ROC_model_validation_symptoms_at_presentation.pdf")
+plot(roc_perf,
+     colorize = TRUE)
+rect(0, 1.1, 1, 1.7, xpd=TRUE, col="white", border="white")
+title(paste0("AUC = ",round(auc_ROCR,2)))
+dev.off()
+```

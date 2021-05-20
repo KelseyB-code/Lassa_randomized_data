@@ -2,185 +2,75 @@
 title: "Descriptive analysis of binary variables in Lassa virus dataset"
 ---
 
-Lassa "mock" data
 ```{r}
 library(dplyr)
-library(stringr)
-library(purrr)
-library(questionr)
-library(naniar)
-library(ggplot2)
-library(Rmisc)
-library(ggpubr)
-library(tidyr)
-library(textclean)
 ```
 
+Load data. 
 ```{r}
-filename = "C:/Users/kelse/Documents/Year_2/Rotations/Colubri/Lassa_virus/practice_data/commcare-randomized-data-2018-2020.csv"
-
+filename = "C:/Users/Matt/Desktop/Kelsey/Data/2018-cleaned.csv"
 lassa <- read.csv(filename, header = TRUE, sep = ",")
-```
+lassa <- lassa[-1]
 
+bin <- lassa[c(30:49)]
+bin$out <- as.factor(bin$out)
 
-Subset data to contain only clinical features before admission
+died <- bin %>% filter(out == 1) %>% select(-out)
+surv <- bin %>% filter(out == 0) %>% select(-out)
+all <- rbind(died, surv)
 
-```{r}
-#Subset data
-clinical_features.before_admission <- lassa %>%
-  select(contains("clinical_features.before_admission")) %>%
-  select(contains("duration")) %>%
-  select(!contains("days")) 
-
-#Remove redundant text from names
-names(clinical_features.before_admission) <-  mgsub(names(clinical_features.before_admission), c(
-  "clinical_features.before_admission_group.before_admission_symptom_duration.",
-  "clinical_features.before_admission_group.before_admission_bleeding_question_group.bleeding_duration.",
-  "_before_admission",
-  "_duration.symptom"), c("", "", "", ""))
-```
-
-Now convert all values containing text to 1 and all empty values to 0 so we can treat these variables as binary.
-
-```{r}
-clinical_features.before_admission[clinical_features.before_admission != ""] <- 1
-clinical_features.before_admission[clinical_features.before_admission == ""] <- 0
-```
-
-Combine some variables as described in Okokhere et al.
-Severe CNS features = coma, seizure, tremors, confusion 
-Non-severe CNS features = dizziness, lethargy, drowsiness (no lethargy or drowsiness in this dataset)
-
-bleeding_all = eyes_bleeding, hematemesis (vomiting blood), hematochezia (blood in stool), hemoptysis (coughing up blood), injection_sites_bleeding, mouth_bleeding, nostril_bleeding, vaginal_bleeding, other_bleeding
-
-```{r}
-#subset bleeding variables and sum values in new variable, don't include eyes_bleeding
-bleeding_names <- names(clinical_features.before_admission[c(2,4:9)])
-bleeding <- clinical_features.before_admission[,bleeding_names]
-bleeding <- map_df(bleeding, as.numeric)
-bleeding$bleeding = rowSums(bleeding)
-bleeding[bleeding > 1] <- 1
-
-#subset severe cns variables and sum values in new variable
-severe_cns_names <- c("coma", "seizure", "tremors", "confusion")
-severe_cns <- clinical_features.before_admission[,severe_cns_names]
-severe_cns <- map_df(severe_cns, as.numeric)
-severe_cns$severe_cns = rowSums(severe_cns)
-severe_cns[severe_cns > 1] <- 1
-```
-
-Make separate data frames for survived, died, and all patients with known outcome. 
-
-```{r}
-#vector of variables to include in final analysis - remove "red_eyes" because there are not
-names <- c("hematuria", "abdominal_pain", "chest_pain", "cough", "deafness", "diarrhea", "dizziness", "dyspnoea", "fever", "headache", "jaundice", "myalgia", "neck_stiffness","restlessness", "sore_throat", "vomiting", "weakness", "other")
-
-outcome <- lassa$clinical_outcome.outcome
-
-cfba <- cbind("outcome" = outcome, "bleeding" = bleeding$bleeding, "severe_cns" = severe_cns$severe_cns, clinical_features.before_admission[,c(names)])
+list_df <- list(died, surv, all) 
 ```
 
 Calculate totals and percents of people who experienced each symptom for all, died, and survived.
-
 ```{r}
-survived_bin <- cfba[grep("recovered", cfba$outcome), ]
-died_bin <- cfba[grep("died", cfba$outcome), ]
-all_bin <- rbind(survived_bin, died_bin)
+total <- map_df(list_df, function(x) colSums(x, na.rm=T))
+percent <- rbind(t[1,]/nrow(died)*100, t[2,]/nrow(surv)*100, t[3,]/nrow(all)*100)
 
-#First save all the tables as variables - this gives the total number of patients experiencing each symptom
-#select the second element of the table for each variable
-all_total <- map(map(all_bin, table), 2)
-S_total <- map(map(survived_bin, table), 2)
-D_total <- map(map(died_bin, table), 2)
-
-#Remove first row
-all_total <- all_total[-1]
-S_total <- S_total[-1]
-D_total <- D_total[-1]
-cfba_binary <- names(cfba)
-cfba_binary <- cfba_binary[-1]
-
-#Replace NULL values with o
-all_total[all_total == "NULL"] <- 0
-S_total[S_total == "NULL"] <- 0
-D_total[D_total == "NULL"] <- 0
-
-#Save percent data in variable
-
-all_percent <- round(unlist(all_total)/nrow(all_bin), 2)*100
-S_percent <- round(unlist(S_total)/nrow(survived_bin), 2)*100
-D_percent <- round(unlist(D_total)/nrow(died_bin), 2)*100
-
-#OI_percent_list <- map(map(all, function(x) prop.table(table(x))), 2)
-#S_percent_list <- map(map(survived, function(x) prop.table(table(x))), 2)
-#D_percent_list <- map(map(died, function(x) prop.table(table(x))), 2)
-
-#unlist percent data, multiply by 100, round
-#OI_percent <- round(unlist(OI_percent_list) * 100, 0)
-#S_percent <- round(unlist(S_percent_list) * 100, 0)
-#D_percent <- round(unlist(D_percent_list) * 100, 0)
+died_string <- paste(total[1,],"/",nrow(died)," (",round(percent[1,],2),"%)", sep="")
+surv_string <- paste(total[2,],"/",nrow(surv)," (",round(percent[2,],2),"%)", sep="")
+all_string <- paste(total[3,],"/",nrow(all)," (",round(percent[3,],2),"%)", sep="")
 ```
 
-Make strings to report data.
-```{r}
-all_string <- paste(all_total,"/",nrow(all_bin)," (",all_percent,"%)", sep="")
-surv_string <- paste(S_total,"/",nrow(survived_bin)," (",S_percent,"%)", sep="")
-died_string <- paste(D_total,"/",nrow(died_bin)," (",D_percent,"%)", sep="")
-```
-
-Reformat outcome variable as an ordered factor 
-
-```{r}
-all_bin[all_bin == "died"] <- 1
-all_bin[all_bin == "recovered"] <- 0
-all_bin <- data.frame(map(all_bin, as.factor)) #convert variables to factor
-all_bin$outcome <- ordered(all_bin$outcome)
-```
 
 Create separate logistic regression model for each variable and calculate odds ratios by exponentiating coefficients.
 ```{r}
-glm <- map(all_bin, function(x) glm(outcome ~ x, data = all_bin, family = binomial))
-odds_df <- data.frame(map(glm[-1], coefficients))
+glm <- map(bin[-19], function(x) glm(out ~ x, data = bin, family = binomial))
+odds_df <- data.frame(map(glm, coefficients))
 odds_vector <- exp(as.vector(odds_df[-1,]))
 odds_rounded_list <- as.list(round(odds_vector,2))
-
 #Calculate p-values for odds ratios
-p_value_list <- map(map(glm[-1], odds.ratio), "p")
+p_value_list <- map(map(glm, odds.ratio), "p")
 p_value <- map(map(p_value_list, 2), function(x) round(x, 5))
 ```
 
 Create a summary table of the data.
 
 ```{r}
-binary_table <- data.frame(cbind(cfba_binary, all_string, surv_string,  died_string, as.character(p_value), as.character(odds_rounded_list)))
+binary_table <- data.frame(cbind(names(all), all_string, surv_string,  died_string, as.character(p_value), as.character(odds_rounded_list)))
 names(binary_table) <- c("Symptom", "Overall", "Survived", "Died", "p_value", "odds_ratio") 
-binary_table <- binary_table %>%
-  arrange(p_value)
 binary_table
-
 # save output to csv
 dir.create("lassa_fever_analysis")
-write.csv(binary_table, "./lassa_fever_analysis/symptoms_before_admission.csv")
+write.csv(binary_table, "./lassa_fever_analysis/symptoms_at_admission.csv")
 ```
 
-```{r}
+#```{r}
 p <- round(data.frame(unlist(p_value)), 6)
 newdata <- cbind(cfba_binary, OP =  all_percent, SP =  S_percent, DP =  D_percent, p = p)
 names(newdata) <- c("name", "Overall", "Survived", "Died",  "p")
 ```
 
 Order according to increasing p value and generate bar plot
-```{r}
+#```{r}
 newdata$name <- factor(newdata$name, levels = newdata$name[order(newdata$p)])
-
 nd <- newdata %>%
   gather("Type", "Value", -name)
-
 Type = c("Overall", "Died", "Survived", "p")
 nd$Type <- factor(nd$Type, ordered = TRUE,  levels = Type)
 ```
 
-```{r}
+#```{r}
 p <- ggplot(subset(nd, Type %in% c("Overall" , "Died", "Survived")), aes(name, Value, fill = Type)) +
   geom_bar(position = "dodge", stat = "identity", colour="black") +
   scale_fill_manual(values=c("palegreen3", "coral2", "steelblue2")) +
@@ -190,7 +80,6 @@ p <- ggplot(subset(nd, Type %in% c("Overall" , "Died", "Survived")), aes(name, V
   ylim(0, 100) +
   ggtitle("Prevalence of complications in patients diagnosed with Lassa fever") + 
   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
-
 # save output to pdf
 pdf("./lassa_fever_analysis/symptoms_before_admission_prevalence.pdf")
 p

@@ -1,0 +1,111 @@
+
+Model 1: 
+intercept -4.311156675 
+age 0.035277727 
+scns 1.429050048 
+bleeding 0.768763947 
+ast 0.003146318 
+cre 0.174740591 
+
+Model 2:
+intercept -7.41300283 
+age 0.03801523 
+scns 1.03407785 
+bleeding 0.95297837 
+cre 0.16937162 
+k 0.85508951 
+
+```{r}
+val <- read.csv("C:/Users/Matt/OneDrive/Desktop/Kelsey/Data/2018-cleaned.csv")
+val <- val[-1]
+
+############### MODEL 1 #######################
+model1_coef <- list(-4.311156675, 0.035277727, 1.429050048, 0.768763947, 0.003146318, 0.174740591)
+one <- rep(1, 727)
+model1data <- data.frame("int" = one, 
+                         "age" = val$age, 
+                         "scns" = val$scns, 
+                         "blding" = val$blding, 
+                         "ast" = val$ast, 
+                         "cre" = val$cre, 
+                         "out" = val$out)
+
+model1features <- na.omit(model1data)[1:6]
+
+model1_LP <- rowSums(model1features*model1_coef)
+
+data1 <- na.omit(model1data)[1:7]
+data1$LP1 <- model1_LP
+
+############### MODEL 2 #######################
+model2_coef <-  list(-7.41300283, 0.03801523, 1.03407785, 0.95297837, 0.16937162, 0.85508951)
+one <- rep(1, 727)
+model2data <- data.frame("int" = one, 
+                         "age" = val$age, 
+                         "scns" = val$scns, 
+                         "blding" = val$blding, 
+                         "cre" = val$cre, 
+                         "k" = val$k,
+                         "out" = val$out)
+
+model2features <- na.omit(model2data)[1:6]
+
+model2_LP <- rowSums(model2features*model2_coef)
+
+data2 <- na.omit(model2data)[1:7]
+data2$LP2 <- model2_LP
+
+val_sum <- data.frame("sample" = c("validation 1", "validation 2"),
+                      "n" = c(nrow(data1), nrow(data2)),
+                      "mean_LP" = c(mean(data1$LP1), mean(data2$LP2)),
+                      "SD_LP" = c(sd(data1$LP1), sd(data2$LP2)))
+```
+
+
+```{r}
+dev <- read.csv("C:/Users/Matt/OneDrive/Desktop/Kelsey/Data/data-2011-15.csv")
+dev[dev=="\\N"] <- NA
+
+############### MODEL 1 #######################
+model1_coef <- list(-4.311156675, 0.035277727, 1.429050048, 0.768763947, 0.003146318, 0.174740591)
+one <- rep(1, 291)
+model1data <- data.frame("int" = one, 
+                         "age" = as.numeric(dev$AGE), 
+                         "scns" = as.numeric(dev$SCNS), 
+                         "blding" = as.numeric(dev$BLDING), 
+                         "ast" = as.numeric(dev$AST), 
+                         "cre" = as.numeric(dev$CRE), 
+                         "out" = as.numeric(dev$OUT))
+
+model1features <- na.omit(model1data)[1:6]
+
+model1_LP <- rowSums(model1features*model1_coef)
+
+data1 <- na.omit(model1data)[1:7]
+data1$LP1 <- model1_LP
+
+############### MODEL 2 #######################
+model2_coef <-  list(-7.41300283, 0.03801523, 1.03407785, 0.95297837, 0.16937162, 0.85508951)
+one <- rep(1, 291)
+model2data <- data.frame("int" = one, 
+                         "age" = as.numeric(dev$AGE), 
+                         "scns" = as.numeric(dev$SCNS), 
+                         "blding" = as.numeric(dev$BLDING), 
+                         "cre" = as.numeric(dev$CRE), 
+                         "k" = as.numeric(dev$K),
+                         "out" = as.numeric(dev$OUT))
+
+model2features <- na.omit(model2data)[1:6]
+
+model2_LP <- rowSums(model2features*model2_coef)
+
+data2 <- na.omit(model2data)[1:7]
+data2$LP2 <- model2_LP
+
+dev_sum <- data.frame("sample" = c("development 1", "development 2"),
+                      "n" = c(nrow(data1), nrow(data2)),
+                      "mean_LP" = c(mean(data1$LP1), mean(data2$LP2)),
+                      "SD_LP" = c(sd(data1$LP1), sd(data2$LP2)))
+
+rbind(dev_sum[1,], val_sum[1,], dev_sum[2,], val_sum[2,])
+```

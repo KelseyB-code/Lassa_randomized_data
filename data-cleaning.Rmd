@@ -1,17 +1,13 @@
-Load packages.
 ```{r}
 library(dplyr)
 library(stringr)
 library(purrr)
-```
 
-Load data.
-```{r}
-filename = "C:/Users/Matt/Desktop/Kelsey/Data/commcare-cleaned-data-2018-2020.csv"
+# load data 
+
+filename = "C:/Users/Matt/OneDrive/Desktop/Kelsey/Data/commcare-cleaned-data-2018-2020.csv"
 lassa <- read.csv(filename)
-```
 
-```{r}
 age <- lassa$basic_information.age
 sex <- lassa$basic_information.sex
 pcrct <- lassa$pcr_list.pcr_cycle_threshold.0
@@ -27,10 +23,10 @@ pr_max <- lassa$clinical_factors.vital_signs.max_pulse_rate.d1
 sbp_max <- lassa$clinical_factors.vital_signs.max_systolic_blood_pressure.d1
 dbp_max <- lassa$clinical_factors.vital_signs.max_diastolic_blood_pressure.d1
 rr_max <- lassa$clinical_factors.vital_signs.max_respiratory_rate.d1
-```
 
-Group variables for severe cns and bleeding.
-```{r}
+####################################################################################################
+# Group variables for severe cns and bleeding
+
 dur <- lassa %>%
   select(contains("_during_admission"))
 dur <- map_df(dur, function(x) ifelse(grepl("d1", x), 1, 0))
@@ -52,6 +48,7 @@ scns[scns > 1] <- 1
 scns <- scns$rowSums.scns.
 
 # define other binary variables
+out <- lassa$clinical_outcome.outcome
 sthr <- dur$clinical_factors.during_admission_symptom_duration.sore_throat_duration.symptom_during_admission
 coug <- dur$clinical_factors.during_admission_symptom_duration.cough_duration.symptom_during_admission
 vomit <- dur$clinical_factors.during_admission_symptom_duration.vomiting_duration.symptom_during_admission
@@ -64,13 +61,17 @@ jaun <- dur$clinical_factors.during_admission_symptom_duration.jaundice_duration
 reyes <- dur$clinical_factors.during_admission_symptom_duration.red_eyes_duration.symptom_during_admission
 swell <- dur$clinical_factors.during_admission_symptom_duration.face_or_neck_swelling_duration.symptom_during_admission
 ribav <- lassa$special_interventions.treatment.ribavirin
-out <- lassa$clinical_outcome.outcome
 dial <- lassa$special_interventions.dialysis
 prot <- lassa$protein.urine_protein_yes_no.0
 hema <- lassa$blood.urine_blood_yes_no.0
-```
 
-```{r}
+ribav[is.na(ribav)] <- 0
+dial[is.na(dial)] <- 0
+prot[is.na(prot)] <- 0
+hema[is.na(hema)] <- 0
+
+################################################################################################
+# only include blood chemistry tests administered within one day of admission
 lassa1 <- lassa %>%
   dplyr::mutate(across(starts_with("blood"),
                       ~ifelse(blood_chemistry_list.days_since_admission_of_test.0 %in% 
@@ -99,10 +100,10 @@ plt <- lassa1$hematology_list.platelet.0
 lym <- lassa1$hematology_list.lymphocytes.0
 mon <- lassa1$hematology_list.monocytes.0
 gra <- lassa1$hematology_list.granulocytes_neutrophils.0
-```
 
-Reformat variables.
-```{r}
+########################################################################################################33
+# reformat variables
+
 sex <- case_when(sex == "male" ~ 0,
           sex == "female" ~ 1)
 
@@ -122,16 +123,12 @@ hema <- case_when(hema == "no" ~ 0,
           hema == "yes" ~ 1)
 
 pcrct <- ifelse(pcrct > 60, NA, pcrct)
-```
 
-Save data.
-```{r}
+#############################################################################################################
+# save data
 new <- data.frame(cbind(age, pcrct, dofbp, temp, sbp, dbp, pr, rr, temp_max, sbp_max, dbp_max, rr_max, esr, k,  na, alk, tpro, alb, tbil, ast, alt, bun, cre, wbc, hct, plt, lym, mon, gra, sex, scns, blding, sthr, coug, vomit, diarr, head, abdp, chesp, weak, jaun, reyes, swell, ribav, dial, prot, hema, out))
 
 new <- new %>% mutate_all(na_if,"")
-```
 
-```{r}
-write.csv(new, "2018-cleaned.csv")
+write.csv(new, "2018-cleaned.csv", row.names = F)
 ```
-

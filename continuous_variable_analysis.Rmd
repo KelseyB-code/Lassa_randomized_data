@@ -7,11 +7,12 @@ library(dplyr)
 library(Rmisc)
 library(questionr)
 library(tidyr)
+library(purrr)
 ```
 
 Load data. 
 ```{r}
-filename = "2018-cleaned.csv"
+filename = "C:/Users/Matt/OneDrive/Desktop/Kelsey/Data/2018-cleaned.csv"
 lassa <- read.csv(filename, header = TRUE, sep = ",")
 lassa <- lassa[-1]
 
@@ -20,9 +21,9 @@ cont <- cbind(cont, "out" = as.factor(lassa$out))
 
 died <- cont %>% filter(out == 1) %>% select(-out)
 surv <- cont %>% filter(out == 0) %>% select(-out)
-all <- cont %>% select(-out)
+all <- rbind(died,surv)
 
-list_df <- list(died, surv, all) 
+list_df <- list(died, surv, all)
 ```
 
 Calculate mean and 95% CI for survived and died. Gives error message "NaNs produced" because some variables (calcium and phosphates) have no data. I left these in because in the real dataset these variables may have values.
@@ -94,66 +95,29 @@ dir.create("lassa_fever_analysis")
 write.csv(summary, "./lassa_fever_analysis/continuous_variable_summary.csv")
 ```
 
-Visual analysis of continuous variables:
+Calculate CFR by age group.
 
 ```{r}
-# create string to include p value in ggplot title
+ag <- data.frame("age" = cont$age, "out" = cont$out)
+ag <- na.omit(ag)
+labs <- c("0-10", "10-20", "20-30", "30-40", "40-50", "50-60", "60-70", "70+")
+ag$group <- cut(ag$age, breaks = c(seq(0, 70, by = 10), Inf), labels = labs, right = FALSE)
 
-names <- row.names(summary)
-p_value_string <- paste0(names, "\n(p = ",summary$p_value,")")
-#p_value_string <- c("outcome", p_value_string)
-# format data to be used in plot 
-names(died) <- p_value_string
-names(surv) <- p_value_string
-d <- died %>%                   
-  gather()
-s <- surv %>%                   
-  gather()
+ag <- ag %>%
+  group_by(group) %>%
+  dplyr::summarize(total = n(), surv = table(out)[1], died = table(out)[2], CFR = table(out)[2]/n())
+write.csv(ag, "./lassa_fever_analysis/cfr_by_age.csv")
+```
+
+Is viral load >20 associated with increased risk of death?
+```{r}
+cont$pcr_bin <- ifelse(cont$pcrct > 25, 0, 1)
+glm(out ~ pcr_bin, data = cont, family = binomial)
+cont
+exp(2.342)
 ```
 
 ```{r}
-library(ggplot2)
-library(ggforce)
-install.packages("ggplot2")
-install.packages("ggforce")
-# create ggplot
-p1 <- ggplot() +
-  geom_density(data = s, (aes(value)), fill='lightblue', color="darkblue") +
-  facet_wrap_paginate(~ key, scales = "free", ncol = 4, nrow = 4, page = 1) + 
-  geom_density(data = d, (aes(value)), fill='red', color="darkred") +
-  facet_wrap_paginate(~ key, scales = "free", ncol = 4, nrow = 4, page = 1)
-p1
-pdf("./lassa_fever_analysis/continuous_plot1.pdf")
-p1
-dev.off()
+cont$calc_pcrct <- cont$pcrct/-5
 ```
 
-```{r}
-p2 <- ggplot() +
-  geom_density(data = s, (aes(value)), fill='lightblue', color="darkblue") +
-  facet_wrap_paginate(~ key, scales = "free", ncol = 4, nrow = 4, page = 2) + 
-  geom_density(data = d, (aes(value)), fill='red', color="darkred") +
-  facet_wrap_paginate(~ key, scales = "free", ncol = 4, nrow = 4, page = 2)
-p2
-pdf("./lassa_fever_analysis/continuous_plot2.pdf")
-p2
-dev.off()
-```
-
-```{r}
-p3 <- ggplot() +
-  geom_density(data = s, (aes(value)), fill='lightblue', color="darkblue") +
-  facet_wrap_paginate(~ key, scales = "free", ncol = 4, nrow = 4, page = 3) + 
-  geom_density(data = d, (aes(value)), fill='red', color="darkred") +
-  facet_wrap_paginate(~ key, scales = "free", ncol = 4, nrow = 4, page = 3)
-p3
-pdf("./lassa_fever_analysis/continuous_plot3.pdf")
-p3
-dev.off()
-```
-
-```{r}
-pdf("test.pdf")
-plots <- c(p1, p2, p3)
-dev.off()
-```

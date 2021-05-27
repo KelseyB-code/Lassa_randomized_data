@@ -1,8 +1,30 @@
+
+# look at missing data
+
+lassa <- read.csv("Data/commcare-cleaned-data-2018-2020.csv")
+
+ct <- lassa %>%
+  select(contains("pcr_list.pcr_cycle"))
+
+ct <- cbind(ct, lassa$clinical_outcome.outcome)
+
+names <- c("day0", "day1", "day2", "day3", "day4", "day5", "day6", "out")
+names(ct) <- names
+
+ct <- ct %>%
+  filter(out == "recovered" | out == "died")
+
+ct %>%
+  group_by(out) %>%
+  summarise_all(funs(sum(!is.na(.))))
+
+#################################################################
+
 library(ggplot2)
 library(dplyr)
 
-var = "BUN"
-search_term = "urea" #variable name in blood_chemistry_list
+var = "Ct"
+search_term = "pcr_list.pcr_cycle_threshold" #variable name in blood_chemistry_list
 filename = "Data/commcare-cleaned-data-2018-2020.csv"
 lassa <- read.csv(filename)
 
@@ -17,10 +39,9 @@ outcome <- lassa %>%
 outcome <- ifelse(outcome == "recovered", 0, 1)
 
 val <- lassa %>%
-  select(starts_with("blood_chemistry")) %>%
   select(contains(search_term))
 days <- lassa %>%
-  select(contains("blood_chemistry_list.days_since_admission")) 
+  select(contains("pcr_list.days_since_admission_of_test")) 
 
 day0 = data.frame(cbind("ID" = lassa$ID, "outcome" = outcome, "age" = age, "day" = days[,1], "val" = val[,1]))
 day1 = data.frame(cbind("ID" = lassa$ID, "outcome" = outcome, "age" = age, "day" = days[,2], "val" = val[,2]))
@@ -45,44 +66,21 @@ long_data <- distinct(long_data)
 long_data <- long_data[complete.cases(long_data), ] 
 
 long_data <-long_data %>% 
-  group_by(ID) %>% 
-  filter(n()>=3)
+  group_by(ID) 
 
 write.csv(long_data, paste("Data/", var, "_over_time.csv", sep=""), row.names = F)
-
-####################################################################################
-# Graph BUN to cre ratio
-
-cre <- read.csv("Data/Cre_over_time.csv")
-bun <- read.csv("Data/BUN_over_time.csv")
-
-cre_bun <- merge(cre, bun,by=c("ID","day", "age", "outcome"))
-
-colnames(cre_bun)[5] <- "cre"
-colnames(cre_bun)[6] <- "bun"
-
-cre_bun$val <- cre_bun$bun/cre_bun$cre
-
-write.csv(cre_bun, paste("Data/BUN_CRE_ratio_over_time.csv", sep=""), row.names = F)
 
 ###################################################################################
 long_data$val = as.numeric(long_data$val)
 
-#pdf(file = paste("Data/lassa_fever_analysis/", var, "_over_time.pdf", sep=""),   # The directory you want to save the file in
-    #width = 7.4, # The width of the plot in inches
-   # height = 5.85) # The height of the plot in inches
-
 ggplot(data = long_data, aes(x = day, y = val, group = ID, colour = outcome)) +
-  geom_line(aes(color = as.factor(outcome), linetype = as.factor(outcome)), size = 0.7) +
-  scale_linetype_manual(values = c("longdash", "solid")) + 
+  geom_point(aes(color = as.factor(outcome)), alpha = 1/15) + 
   scale_color_manual(values = c("black", "red")) + theme_bw() +
   theme(legend.position = "", panel.border = element_blank(), panel.grid.major = element_blank(),
         panel.grid.minor = element_blank(), axis.line = element_line(colour = "black")) + 
   labs(x = "day", y = var, colour = "outcome ") +
-  xlim(0, 25) + 
+  xlim(0, 15) + 
   ggtitle(var) +
   theme(plot.title = element_text(hjust = 0.5)) +
-  ylim(0,100)
-
-#dev.off()
- 
+  ylim(18,50) +
+  geom_smooth(aes(group = outcome))

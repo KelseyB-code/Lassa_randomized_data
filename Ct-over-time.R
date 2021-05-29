@@ -1,7 +1,7 @@
-
+rm(list=ls())
 # look at missing data
-
-lassa <- read.csv("Data/commcare-cleaned-data-2018-2020.csv")
+setwd("/Users/kelsey/Dropbox (UMass Medical School)/Kelsey/Lassa Fever/Data")
+lassa <- read.csv("commcare-cleaned-data-2018-2020.csv")
 
 ct <- lassa %>%
   select(contains("pcr_list.pcr_cycle"))

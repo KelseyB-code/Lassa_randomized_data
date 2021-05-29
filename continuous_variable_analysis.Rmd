@@ -12,7 +12,7 @@ library(purrr)
 
 Load data. 
 ```{r}
-filename = "C:/Users/Matt/OneDrive/Desktop/Kelsey/Data/2018-cleaned.csv"
+filename = "/Users/kelsey/Dropbox (UMass Medical School)/Kelsey/Lassa Fever/Data/2018-cleaned.csv"
 lassa <- read.csv(filename, header = TRUE, sep = ",")
 lassa <- lassa[-1]
 

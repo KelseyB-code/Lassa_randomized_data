@@ -14,7 +14,6 @@ Load data.
 ```{r}
 filename = "/Users/kelsey/Dropbox (UMass Medical School)/Kelsey/Lassa Fever/Data/2018-cleaned.csv"
 lassa <- read.csv(filename, header = TRUE, sep = ",")
-lassa <- lassa[-1]
 
 cont <- lassa[c(1:29)]
 cont <- cbind(cont, "out" = as.factor(lassa$out))
@@ -91,8 +90,11 @@ summary <- data.frame(cbind("name" = names(p_value),
 summary
 # print summary table with most significant p values first
 arrange(summary, p_value)
-dir.create("lassa_fever_analysis")
-write.csv(summary, "./lassa_fever_analysis/continuous_variable_summary.csv")
+attach(summary)
+cbind(name, odds_ratio, p_value)
+detach(summary)
+# dir.create("lassa_fever_analysis")
+# write.csv(summary, "./lassa_fever_analysis/continuous_variable_summary.csv")
 ```
 
 Calculate CFR by age group.

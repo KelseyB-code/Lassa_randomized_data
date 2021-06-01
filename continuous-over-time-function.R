@@ -1,6 +1,7 @@
 
 rm(list=ls())
 library(ggplot2)
+library(purrr)
 library(dplyr)
 
 ## preprocess data 
@@ -12,7 +13,7 @@ source('longitudinal-source-code.R')
 ################################################################################
 
 biglist <- lapply(1:length(namelist), 
-                  function(x) lapply(1:7, 
+                  function(x) lapply(1:20, 
                                      function(i) data.frame(ID = lassa$ID, 
                                                             outcome = ifelse(lassa$clinical_outcome.outcome == "died", 1, 0), 
                                                             age = lassa$basic_information.age, 
@@ -67,14 +68,32 @@ ggfunc <- function(df, names) {ggplot(data = df, aes(x = day, y = val, group = I
 
 gglist <- lapply(1:length(namelist), function(x) ggfunc(biglist[[x]], namelist[[x]]))
 
-gglist
-# pdf("/Users/kelsey/Dropbox (UMass Medical School)/Kelsey/Lassa Fever/Data/plots-over-time.pdf", 
-#     onefile = TRUE)
-# gglist
-# dev.off()
+g1 <- gglist[[1]] +
+  ylim(0,1000)
+
+g2 <- gglist[[2]] +
+  ylim(0,100) +
+  ggtitle("BUN") +
+  labs(y = "BUN")
+
+g3 <- gglist[[3]] +
+  ylim(0,6)
+
+g4 <- gglist[[4]] +
+  ylim(0,400)
+
+g5 <- gglist[[5]] +
+  ylim(0,8)
+
+library(gridExtra)
+df("/Users/kelsey/Dropbox (UMass Medical School)/Kelsey/Lassa Fever/Data/plots-over-time.pdf", 
+    onefile = TRUE)
+grid.arrange(g1, g2, g3, g4, g5, nrow = 2, ncol = 3)
+dev.off()
 
 ##### count values by day for patients who died
-# out1 <- subset(long_data, outcome == 1)
-# out1 %>%
-#   group_by(day) %>%
-#   count()
+# library(gtsummary)
+# out1 <- subset(biglist[[1]], outcome == 1)
+# out1 <- subset(out1, day >0)
+# 
+# barplot(table(out1$day), ylim=c(0,4), xlim=c(0,12), main = "Frequency of reported Ct values \n for patients who died")

@@ -34,7 +34,7 @@ ct <- c("ct")
 namelist <- c(bloodchem, vitals, ct)
 
 setwd("/Users/kelsey/Lassa_randomized_data")
-source("values-over-time-function.R")
+source("5b_values-over-time-function.R")
 
 pdf("/Users/kelsey/Dropbox (UMass Medical School)/Kelsey/Lassa Fever/Data/all-over-time.pdf")
 n <- length(gglist)

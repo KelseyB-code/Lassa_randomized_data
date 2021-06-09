@@ -4,16 +4,17 @@ title: "Descriptive analysis of binary variables in Lassa virus dataset"
 
 ```{r}
 library(dplyr)
+library(questionr)
 ```
 
 Load data. 
 ```{r}
 filename = "/Users/kelsey/Dropbox (UMass Medical School)/Kelsey/Lassa Fever/Data/2018-2021-cleaned.csv"
 lassa <- read.csv(filename, header = TRUE, sep = ",")
-lassa <- lassa[-1]
 
-bin <- lassa[c(29:47)]
-bin$out <- as.factor(bin$out)
+bin <- lassa %>%
+  dplyr::select(sex:swell)
+bin$out <- as.factor(lassa$out)
 
 died <- bin %>% filter(out == 1) %>% select(-out)
 surv <- bin %>% filter(out == 0) %>% select(-out)

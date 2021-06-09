@@ -118,8 +118,3 @@ glm(out ~ pcr_bin, data = cont, family = binomial)
 cont
 exp(2.342)
 ```
-
-```{r}
-cont$calc_pcrct <- cont$pcrct/-5
-```
-

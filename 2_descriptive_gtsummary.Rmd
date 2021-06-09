@@ -1,0 +1,111 @@
+---
+title: "Analysis of symptoms and treatments of Lassa fever patients "
+output: html_notebook
+---
+
+```{r}
+library(dplyr)
+library(gtsummary)
+setwd("/Users/kelsey/Dropbox (UMass Medical School)/Kelsey/Lassa Fever/Data")
+lassa_raw <- read.csv("2018-2021-cleaned.csv")
+
+lassa <- lassa_raw %>%
+  mutate_if(~ is.numeric(.) && all(unique(.) %in% c(0, 1, NA)), factor) %>%
+  mutate_if(~ is.integer(.), as.numeric)
+
+sx <- lassa %>% 
+  dplyr::select(sex:swell)
+sx <- data.frame(lapply(sx, function(x) case_when(x == 0 ~ "no", x == 1 ~ "yes")), out = lassa$out)
+```
+
+```{r, echo=FALSE}
+
+################################################################################
+## Calculate odds ratios
+
+# Define continuous variables to be divided by IQR
+contin <- c("dofbp", "temp", "sbp", "dbp", "pr", "rr", "temp_max",
+            "sbp_max", "dbp_max", "rr_max", "esr", "k", "na", "alk", "tpro",
+            "alb", "tbil", "ast", "alt", "bun", "cre", "wbc", "hct", "plt",
+            "lym", "mon", "gra")
+
+#### OR for continuous vars
+lassa %>%
+  as_tibble() %>%
+  dplyr::mutate(across(contin, function(x) x/IQR(x, na.rm=T)),
+                age = age/10,
+                ct = pcrct/-5) %>%
+  dplyr::select(age, ct, contin, out) %>%
+  tbl_uvregression(
+    method = glm,
+    y = out,
+    method.args = list(family = binomial),
+    exponentiate = T,
+    pvalue_fun = ~style_pvalue(.x, digits = 2))
+
+##### OR for binary vars
+sx %>%
+  as_tibble() %>%
+  dplyr::select(-jaun) %>%
+  tbl_uvregression(
+    method = glm,
+    y = out,
+    method.args = list(family = binomial),
+    exponentiate = T,
+    pvalue_fun = ~style_pvalue(.x, digits = 2))
+
+## Summarize continuous vars
+names(lassa)
+lassa %>%
+  dplyr::select(contin, out) %>%
+  tbl_summary(by = out,
+              statistic = all_continuous() ~ "{mean} ({sd})",
+              digits = all_continuous() ~ 2) %>%
+  modify_header(update = list(
+    stat_1 ~ "**Survived**, N = {n}",
+    stat_2 ~ "**Died**, N = {n}"))
+
+```
+
+```{r}
+# summarize symptoms
+ sx %>% 
+  dplyr::select(everything()) %>% 
+  tbl_summary(by = out,
+              statistic =  all_continuous() ~ "{n} / {N} ({p}%)") %>%
+  modify_header(update = list(
+    stat_1 ~ "**Survived**, N = {n}",
+    stat_2 ~ "**Died**, N = {n}"))
+```
+
+```{r warning=TRUE}
+# summarize treatment
+tx <- lassa %>% 
+  dplyr::select(dialysis:antibiotic)
+tx <- data.frame(lapply(tx, function(x) case_when(x == 0 ~ "no", x == 1 ~ "yes")), out = lassa$out)
+
+tx %>% 
+  dplyr::select(everything()) %>% 
+  tbl_summary(by = out,
+              statistic =  all_continuous() ~ "{n} / {N} ({p}%)") %>%
+  modify_header(update = list(
+    stat_1 ~ "**Survived**, N = {n}",
+    stat_2 ~ "**Died**, N = {n}"))
+```
+
+```{r warning=FALSE}
+ab <- lassa %>% 
+  dplyr::select(Ceftriaxone:Amoxicillin)
+ab <- data.frame(lapply(ab, function(x) case_when(x == 0 ~ "no", x == 1 ~ "yes")), out = lassa$out)
+
+ab %>% 
+  dplyr::select(everything()) %>% 
+  tbl_summary(by = out,
+              statistic =  all_continuous() ~ "{n} / {N} ({p}%)") %>%
+  modify_header(update = list(
+    stat_1 ~ "**Survived**, N = {n}",
+    stat_2 ~ "**Died**, N = {n}")) 
+
+```
+
+

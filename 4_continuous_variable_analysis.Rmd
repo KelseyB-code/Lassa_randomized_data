@@ -12,7 +12,7 @@ library(purrr)
 
 Load data. 
 ```{r}
-filename = "/Users/kelsey/Dropbox (UMass Medical School)/Kelsey/Lassa Fever/Data/2018-cleaned.csv"
+filename = "/Users/kelsey/Dropbox (UMass Medical School)/Kelsey/Lassa Fever/Data/2018-2021-cleaned.csv"
 lassa <- read.csv(filename, header = TRUE, sep = ",")
 
 cont <- lassa[c(1:29)]
@@ -89,12 +89,12 @@ summary <- data.frame(cbind("name" = names(p_value),
 
 summary
 # print summary table with most significant p values first
-arrange(summary, p_value)
-attach(summary)
-cbind(name, odds_ratio, p_value)
-detach(summary)
-# dir.create("lassa_fever_analysis")
-# write.csv(summary, "./lassa_fever_analysis/continuous_variable_summary.csv")
+# arrange(summary, p_value)
+# attach(summary)
+# cbind(name, odds_ratio, p_value)
+# detach(summary)
+dir.create("lassa_fever_analysis")
+write.csv(summary, "/Users/kelsey/Dropbox (UMass Medical School)/Kelsey/Lassa Fever/Data/lassa_fever_analysis/continuous_variable_summary.csv")
 ```
 
 Calculate CFR by age group.
@@ -108,7 +108,7 @@ ag$group <- cut(ag$age, breaks = c(seq(0, 70, by = 10), Inf), labels = labs, rig
 ag <- ag %>%
   group_by(group) %>%
   dplyr::summarize(total = n(), surv = table(out)[1], died = table(out)[2], CFR = table(out)[2]/n())
-write.csv(ag, "./lassa_fever_analysis/cfr_by_age.csv")
+write.csv(ag, "/Users/kelsey/Dropbox (UMass Medical School)/Kelsey/Lassa Fever/Data/lassa_fever_analysis/cfr_by_age.csv")
 ```
 
 Is viral load >20 associated with increased risk of death?
